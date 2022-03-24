@@ -303,19 +303,21 @@ macro_rules! inline_asm {
 
 fn main() {
     let start = Instant::now();
-    // inline_asm!(r#"
-    // push U12;
-    // jmp 8;
-    // push U22;
-    // callv add 0;
-    // callv ustr 0;
-    // callv printf 0;
-    // "#);
-    let lh = 12u64;
-    let rh = 22u64;
-    let sum = lh + rh;
-    let ustr = sum.to_string();
-    print!("{}", ustr);
+    inline_asm!(r#"
+    push U12;
+    jmp 8;
+    push U22;
+    callv add 0;
+    callv ustr 0;
+    callv printf 0;
+
+    jmp 0;
+    push U12;
+    push U11000000;
+    callv add 0;
+    callv ustr 0;
+    callv printf 0;
+    "#);
     let dur = Instant::now() - start;
-    println!("\nfinished in {} microseconds", dur.as_micros() + 15);
+    println!("\nfinished in {}ms", dur.as_millis());
 }
