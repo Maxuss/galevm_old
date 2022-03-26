@@ -1,20 +1,7 @@
+use std::collections::HashMap;
 use std::io::Cursor;
 use crate::tks::Literal;
 use crate::vm::AllocSized;
-
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
-#[repr(C)]
-pub struct Constant {
-    value: Literal
-}
-
-impl Constant {
-    pub fn wrap(value: Literal) -> Self {
-        Constant {
-            value
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialOrd, PartialEq)]
 #[repr(C)]
@@ -36,7 +23,7 @@ impl Mutable {
         self.clone()
     }
 
-    pub fn value(&mut self) -> Literal {
+    pub fn value(&self) -> Literal {
         self.value.clone()
     }
 }
@@ -97,5 +84,37 @@ impl AllocSized for Mutable {
 
     fn read(_: &mut Cursor<Vec<u8>>) -> anyhow::Result<Self> where Self: Sized {
         panic!("Mutables can not be read raw!")
+    }
+}
+
+#[derive(Debug, Clone)]
+#[repr(C)]
+pub struct VariableScope {
+    mutables: HashMap<String, Mutable>,
+    consts: HashMap<String, Literal>
+}
+
+impl VariableScope {
+    pub fn new() -> Self {
+        Self {
+            mutables: Default::default(),
+            consts: Default::default()
+        }
+    }
+
+    pub fn add_var(&mut self, name: &str, var: Literal) {
+        self.mutables.insert(name.to_string(), Mutable::wrap(var));
+    }
+
+    pub fn add_const(&mut self, name: &str, var: Literal) {
+        self.consts.insert(name.to_string(), var);
+    }
+
+    pub fn get_var(&self, name: &str) -> anyhow::Result<&Mutable> {
+        Ok(self.mutables.get(name).unwrap())
+    }
+
+    pub fn get_const(&self, name: &str) -> anyhow::Result<&Literal> {
+        Ok(self.consts.get(name).unwrap())
     }
 }

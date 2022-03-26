@@ -1,3 +1,4 @@
+use crate::var::Mutable;
 use crate::visit::{Visitable, Visitor};
 
 pub type Ident = String;
@@ -134,10 +135,9 @@ impl Visitable for Keyword {
             Keyword::Import => {}
             Keyword::Let => {
                 if let Literal::Ident(name) = &mut visitor.pop_stack() {
-                    let _ = visitor.pop_stack();
                     visitor.pop_stack().visit(visitor)?;
                     let mut value = visitor.pop_stack();
-                    let ptr = match &mut value {
+                    match &mut value {
                         Literal::Number(num) => {
                             visitor.alloc_write(num)?
                         }
@@ -160,17 +160,16 @@ impl Visitable for Keyword {
                             visitor.alloc_write(bool)?
                         }
                     };
-                    visitor.alloc_write(&mut format!("M{name}{ptr}", name = name, ptr = ptr))?;
+                    visitor.add_var(name.to_owned(), Mutable::wrap(value))
                 } else {
                     panic!("Expected an ident name for variable!")
                 }
             }
             Keyword::Const => {
                 if let Literal::Ident(name) = &mut visitor.pop_stack() {
-                    let _ = visitor.pop_stack();
                     visitor.pop_stack().visit(visitor)?;
                     let mut value = visitor.pop_stack();
-                    let ptr = match &mut value {
+                    match &mut value {
                         Literal::Number(num) => {
                             visitor.alloc_write(num)?
                         }
@@ -193,7 +192,7 @@ impl Visitable for Keyword {
                             visitor.alloc_write(bool)?
                         }
                     };
-                    visitor.alloc_write(&mut format!("C{name}{ptr}", name = name, ptr = ptr))?;
+                    visitor.add_const(name.to_owned(), value);
                 }
             }
             Keyword::Function => {
@@ -506,16 +505,16 @@ impl Visitable for Expression {
                     }
                 }
             }
-            Expression::StaticAccess(path) => {
+            Expression::StaticAccess(_path) => {
                 // TODO
             }
-            Expression::InstanceAccess(path) => {
+            Expression::InstanceAccess(_path) => {
                 // TODO
             }
-            Expression::InvokeFunction(path, params) => {
+            Expression::InvokeFunction(_path, _params) => {
                 // TODO
             }
-            Expression::InvokeBuiltin(name, params) => {
+            Expression::InvokeBuiltin(_name, _params) => {
                 // TODO
             }
         }

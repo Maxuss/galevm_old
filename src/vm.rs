@@ -165,9 +165,11 @@ impl AllocSized for char {
 }
 
 pub trait Memory {
+    fn jump(&mut self, pos: usize) -> anyhow::Result<()>;
     fn alloc(&mut self, amount: usize) -> anyhow::Result<usize>;
     fn write<A>(&mut self, ptr: usize, value: &mut A) -> anyhow::Result<()> where A: AllocSized;
     fn alloc_write<A>(&mut self, value: &mut A) -> anyhow::Result<usize> where A: AllocSized;
     fn read_dynamic<A>(&mut self, ptr: usize) -> anyhow::Result<A> where A: AllocSized;
     fn read_const<A>(&mut self, ptr: usize) -> anyhow::Result<A> where A: ConstSized + AllocSized;
+    fn free(&mut self, ptr: usize, amount: usize) -> anyhow::Result<()>;
 }
