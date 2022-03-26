@@ -62,6 +62,9 @@ impl AllocSized for Mutable {
             Literal::TypeName(tt) => {
                 tt.len() + 2
             }
+            Literal::Bool(_) => {
+                1
+            }
         }
     }
 
@@ -84,6 +87,9 @@ impl AllocSized for Mutable {
             }
             Literal::TypeName(tt) => {
                 tt.write(buf)
+            }
+            Literal::Bool(bool) => {
+                bool.write(buf)
             }
         }
 

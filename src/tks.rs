@@ -48,6 +48,7 @@ pub enum Literal {
     String(String),
     Char(char),
     Ident(Ident),
+    Bool(bool),
     TypeName(String)
 }
 
@@ -95,6 +96,14 @@ impl Literal {
                 } else {
                     false
                 }
+            }
+            Literal::Bool(_) => {
+                if let Literal::Bool(_) = other {
+                    true
+                } else {
+                    false
+                }
+
             }
         }
     }
@@ -147,6 +156,9 @@ impl Visitable for Keyword {
                         Literal::TypeName(tt) => {
                             visitor.alloc_write(tt)?
                         }
+                        Literal::Bool(bool) => {
+                            visitor.alloc_write(bool)?
+                        }
                     };
                     visitor.alloc_write(&mut format!("M{name}{ptr}", name = name, ptr = ptr))?;
                 } else {
@@ -177,6 +189,9 @@ impl Visitable for Keyword {
                         Literal::TypeName(tt) => {
                             visitor.alloc_write(tt)?
                         }
+                        Literal::Bool(bool) => {
+                            visitor.alloc_write(bool)?
+                        }
                     };
                     visitor.alloc_write(&mut format!("C{name}{ptr}", name = name, ptr = ptr))?;
                 }
@@ -199,30 +214,8 @@ pub enum Expression {
     InvokeBuiltin(Ident, TokenChain)
 }
 
-macro_rules! expr_visitor {
-    ($str:literal $visitor:ident $oper:tt $lh:ident $rh:ident) => {
-        let lh = match $lh {
-            Token::Literal(lit) => {
-                lit.to_owned()
-            }
-            Token::Expression(expr) => {
-                expr.visit($visitor)?;
-                $visitor.pop_stack()
-            }
-            _ => panic!("Invalid operand provided!")
-        };
-        let rh = match $rh {
-            Token::Literal(lit) => {
-                lit.to_owned()
-            }
-            Token::Expression(expr) => {
-                expr.visit($visitor)?;
-                $visitor.pop_stack()
-            }
-            _ => panic!("Invalid operand provided!")
-        };
-        expr_visit!("" $oper $visitor lh, rh);
-    };
+//#region bits + bools
+macro_rules! _sh_impl {
     ($visitor:ident $oper:tt $lh:ident $rh:ident) => {
         let lh = match $lh {
             Token::Literal(lit) => {
@@ -244,41 +237,150 @@ macro_rules! expr_visitor {
             }
             _ => panic!("Invalid operand provided!")
         };
-        expr_visit!($oper $visitor lh, rh);
+        let mut lh = if let Literal::Ident(name) = lh {
+            $visitor.resolve_any_var(name.as_str())
+        } else {
+            lh
+        };
+        let rh = if let Literal::Ident(name) = rh {
+            $visitor.resolve_any_var(name.as_str())
+        } else {
+            rh
+        };
+        let l = match &mut lh {
+            Literal::Number(lb) => {
+                if let Literal::Number(rb) = rh {
+                    Literal::Number(*lb $oper rb)
+                } else {
+                    panic!("Invalid operation provided!")
+                }
+            }
+            _ => panic!("Invalid operand provided!")
+        };
+        $visitor.push_stack(l);
     }
 }
 
-macro_rules! expr_visit {
-        ($oper:tt $visitor:ident $lh:ident, $rh:ident) => {
-        let mut lh = if let Literal::Ident(name) = $lh {
+macro_rules! _bit_impl {
+    ($visitor:ident $oper:tt $lh:ident $rh:ident) => {
+        let lh = match $lh {
+            Token::Literal(lit) => {
+                lit.to_owned()
+            }
+            Token::Expression(expr) => {
+                expr.visit($visitor)?;
+                $visitor.pop_stack()
+            }
+            _ => panic!("Invalid operand provided!")
+        };
+        let rh = match $rh {
+            Token::Literal(lit) => {
+                lit.to_owned()
+            }
+            Token::Expression(expr) => {
+                expr.visit($visitor)?;
+                $visitor.pop_stack()
+            }
+            _ => panic!("Invalid operand provided!")
+        };
+        let mut lh = if let Literal::Ident(name) = lh {
             $visitor.resolve_any_var(name.as_str())
         } else {
-            $lh
+            lh
         };
-        let rh = if let Literal::Ident(name) = $rh {
+        let rh = if let Literal::Ident(name) = rh {
             $visitor.resolve_any_var(name.as_str())
         } else {
-            $rh
+            rh
         };
-        match &mut lh {
-            Literal::Number(lnum) => {
-                if let Literal::Number(rnum) = rh {
-                    Literal::Number(*lnum $oper rnum)
+        let l = match &mut lh {
+            Literal::Bool(lb) => {
+                if let Literal::Bool(rb) = rh {
+                    Literal::Bool(*lb $oper rb)
                 } else {
                     panic!("Invalid operand provided!")
                 }
             }
-            Literal::Float(f) => {
-                if let Literal::Float(rnum) = rh {
-                    Literal::Float(*f $oper rnum)
+            _ => panic!("Invalid operand provided!")
+        };
+        $visitor.push_stack(l);
+    }
+}
+
+macro_rules! _bool_impl {
+    ($visitor:ident $oper:tt $lh:ident $rh:ident) => {
+        let lh = match $lh {
+            Token::Literal(lit) => {
+                lit.to_owned()
+            }
+            Token::Expression(expr) => {
+                expr.visit($visitor)?;
+                $visitor.pop_stack()
+            }
+            _ => panic!("Invalid operand provided!")
+        };
+        let rh = match $rh {
+            Token::Literal(lit) => {
+                lit.to_owned()
+            }
+            Token::Expression(expr) => {
+                expr.visit($visitor)?;
+                $visitor.pop_stack()
+            }
+            _ => panic!("Invalid operand provided!")
+        };
+        let mut lh = if let Literal::Ident(name) = lh {
+            $visitor.resolve_any_var(name.as_str())
+        } else {
+            lh
+        };
+        let rh = if let Literal::Ident(name) = rh {
+            $visitor.resolve_any_var(name.as_str())
+        } else {
+            rh
+        };
+        match &mut lh {
+            Literal::Bool(lb) => {
+                if let Literal::Bool(rb) = rh {
+                    Literal::Bool(*lb $oper rb)
                 } else {
                     panic!("Invalid operand provided!")
                 }
             }
             _ => panic!("Invalid operand provided!")
         }
+    }
+}
+//#endregion bits + bools
+//#region binary expr impl
+macro_rules! _bin_expr_impl {
+    ($($str:literal)? $visitor:ident $oper:tt $lh:ident $rh:ident) => {
+        let lh = match $lh {
+            Token::Literal(lit) => {
+                lit.to_owned()
+            }
+            Token::Expression(expr) => {
+                expr.visit($visitor)?;
+                $visitor.pop_stack()
+            }
+            _ => panic!("Invalid operand provided!")
+        };
+        let rh = match $rh {
+            Token::Literal(lit) => {
+                lit.to_owned()
+            }
+            Token::Expression(expr) => {
+                expr.visit($visitor)?;
+                $visitor.pop_stack()
+            }
+            _ => panic!("Invalid operand provided!")
+        };
+        _visit_impl!($($str)? $visitor $oper lh, rh);
     };
-    ($str:literal $oper:tt $visitor:ident $lh:ident, $rh:ident) => {
+}
+
+macro_rules! _visit_impl {
+    ($($str:literal)? $visitor:ident $oper:tt $lh:ident, $rh:ident) => {
         let mut lh = if let Literal::Ident(name) = $lh {
             $visitor.resolve_any_var(name.to_owned().as_str())
         } else {
@@ -289,8 +391,10 @@ macro_rules! expr_visit {
         } else {
             $rh
         };
-        match &mut lh {
+        let d = match &mut lh {
+            $(
             Literal::String(str) => {
+                let _ = $str;
                 match rh {
                     Literal::Number(num) => {
                         Literal::String(str.to_owned() $oper &num.to_string())
@@ -307,6 +411,7 @@ macro_rules! expr_visit {
                     _ => panic!("Invalid operand provided!")
                 }
             }
+            )?
             Literal::Number(lnum) => {
                 if let Literal::Number(rnum) = rh {
                     Literal::Number(*lnum $oper rnum)
@@ -321,14 +426,34 @@ macro_rules! expr_visit {
                     panic!("Invalid operand provided!")
                 }
             }
+            $(
             Literal::Char(c) => {
+                let _ = $str;
                 if let Literal::Char(ch) = rh {
                     Literal::String(c.to_string() $oper &ch.to_string())
                 } else {
                     panic!("Invalid operand provided!")
                 }
             }
+            )?
             _ => panic!("Invalid operand provided!")
+        };
+        $visitor.push_stack(d);
+    };
+}
+//#endregion binary expr impl
+
+macro_rules! _tk2lit {
+    ($v:ident $visitor:ident) => {
+        match $v {
+            Token::Literal(lit) => {
+                lit.to_owned()
+            }
+            Token::Expression(expr) => {
+                expr.visit($visitor)?;
+                $visitor.pop_stack()
+            }
+            _ => panic!("Expected literal, got {:?}", $v)
         }
     };
 }
@@ -339,27 +464,60 @@ impl Visitable for Expression {
             Expression::BinaryOp(op, lh, rh) => {
                 match op {
                     BinaryOp::Assign => {} // ignoring, should not occur normally
-                    BinaryOp::Add => {
-                        expr_visitor!("" visitor + lh rh);
-                    }
-                    BinaryOp::Sub => {
-                        expr_visitor!(visitor - lh rh);
-                    }
-                    BinaryOp::Div => {}
-                    BinaryOp::Mul => {}
-                    BinaryOp::Mod => {}
-                    BinaryOp::And => {}
-                    BinaryOp::Or => {}
-                    BinaryOp::BitAnd => {}
-                    BinaryOp::BitOr => {}
-                    BinaryOp::BitXor => {}
+                    BinaryOp::Add => { _bin_expr_impl!("" visitor + lh rh); }
+                    BinaryOp::Sub => { _bin_expr_impl!(visitor - lh rh); }
+                    BinaryOp::Div => { _bin_expr_impl!(visitor / lh rh); }
+                    BinaryOp::Mul => { _bin_expr_impl!(visitor * lh rh); }
+                    BinaryOp::Mod => { _bin_expr_impl!(visitor % lh rh); }
+                    BinaryOp::And => { _bool_impl!(visitor && lh rh); }
+                    BinaryOp::Or => { _bool_impl!(visitor || lh rh); }
+                    BinaryOp::BitAnd => { _bit_impl!(visitor & lh rh); }
+                    BinaryOp::BitOr => { _bit_impl!(visitor | lh rh); }
+                    BinaryOp::BitXor => { _bit_impl!(visitor ^ lh rh); }
+                    BinaryOp::BitRsh => { _sh_impl!(visitor >> lh rh); }
+                    BinaryOp::BitLsh => { _sh_impl!(visitor << lh rh); }
                 }
             }
-            Expression::UnaryOp(_, _) => {}
-            Expression::StaticAccess(_) => {}
-            Expression::InstanceAccess(_) => {}
-            Expression::InvokeFunction(_, _) => {}
-            Expression::InvokeBuiltin(_, _) => {}
+            Expression::UnaryOp(op, v) => {
+                match op {
+                    UnaryOp::Neg => {
+                        let lit = _tk2lit!(v visitor);
+                        let l = match lit {
+
+                            Literal::Bool(b) => {
+                                Literal::Bool(!b)
+                            }
+                            _ => panic!("Invalid literal provided!")
+                        };
+                        visitor.push_stack(l);
+                    }
+                    UnaryOp::Rev => {
+                        let lit = _tk2lit!(v visitor);
+                        let l = match lit {
+                            Literal::Number(num) => {
+                                Literal::Number(-num)
+                            }
+                            Literal::Float(f) => {
+                                Literal::Float(-f)
+                            }
+                            _ => panic!("Invalid literal provided!")
+                        };
+                        visitor.push_stack(l);
+                    }
+                }
+            }
+            Expression::StaticAccess(path) => {
+                // TODO
+            }
+            Expression::InstanceAccess(path) => {
+                // TODO
+            }
+            Expression::InvokeFunction(path, params) => {
+                // TODO
+            }
+            Expression::InvokeBuiltin(name, params) => {
+                // TODO
+            }
         }
         Ok(())
     }
@@ -378,6 +536,8 @@ pub enum BinaryOp {
     BitAnd, // &
     BitOr,  // |
     BitXor, // ^
+    BitRsh, // >>
+    BitLsh  // <<
 }
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]

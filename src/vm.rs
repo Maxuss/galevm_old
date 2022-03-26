@@ -53,9 +53,33 @@ impl ConstSized for f32 {
     }
 }
 
+impl ConstSized for bool {
+    fn const_size() -> usize {
+        1
+    }
+}
+
 impl ConstSized for f64 {
     fn const_size() -> usize {
         8
+    }
+}
+
+impl AllocSized for bool {
+    fn size(&mut self) -> usize {
+        1
+    }
+
+    fn write(&mut self, buf: &mut Vec<u8>) -> anyhow::Result<()> {
+        buf.drain(..);
+        buf.extend_from_slice(&[if *self { 0x01 } else { 0x00 }]);
+        Ok(())
+    }
+
+    fn read(buf: &mut Cursor<Vec<u8>>) -> anyhow::Result<Self> where Self: Sized {
+        let mut d = [0u8; 1];
+        buf.read_exact(&mut d)?;
+        Ok(d[0] == 0x01)
     }
 }
 
