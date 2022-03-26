@@ -3,14 +3,14 @@
 version = 3
 
 [[package]]
-name = "byteorder"
-version = "1.4.3"
+name = "anyhow"
+version = "1.0.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
+checksum = "4361135be9122e0870de935d7c439aef945b9f9ddd4199a553b5270b49c82a27"
 
 [[package]]
 name = "galevm"
 version = "0.1.0"
 dependencies = [
- "byteorder",
+ "anyhow",
 ]
