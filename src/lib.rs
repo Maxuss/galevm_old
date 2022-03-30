@@ -114,6 +114,11 @@ mod tests {
             ))),
             Token::Literal(Literal::Ident("greeting".to_string())),
             Token::Keyword(Keyword::Let),
+            Token::Expression(Box::new(Expression::BinaryOp(
+                BinaryOp::Assign,
+                Token::Literal(Literal::Ident("greeting".to_string())),
+                Token::Literal(Literal::String("penis".to_string()))
+            ))),
             Token::Expression(Box::new(Expression::InvokeBuiltin(
                 "println".to_string(),
                 vec![Token::Literal(Literal::Ident("greeting".to_string()))],
@@ -122,7 +127,7 @@ mod tests {
             Token::Literal(Literal::Void),
             Token::RBracket,
             Token::Expression(Box::new(Expression::InvokeStatic(
-                "say_hello".to_string(),
+                "global::say_hello".to_string(),
                 vec![Token::Literal(Literal::String("World!".to_string()))],
             ))),
         ];

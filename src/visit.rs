@@ -119,9 +119,9 @@ impl Vm {
             pos: 0,
             tks: VecDeque::new(),
             lit_stack: vec![],
-            current_scope: "__GLOBAL".to_string(),
+            current_scope: "global".to_string(),
             scopes: HashMap::from([(
-                "__GLOBAL".to_string(),
+                "global".to_string(),
                 Arc::new(Mutex::new(ContainingScope::new())),
             )]),
             scope_types: vec![Scope::Global],
