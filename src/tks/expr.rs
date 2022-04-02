@@ -6,6 +6,7 @@ use crate::visit::{Visitable, Visitor};
 use crate::vm::AllocSized;
 use anyhow::bail;
 use std::io::Cursor;
+use crate::tks::expr_handlers::_binary_op_handler;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
@@ -16,6 +17,10 @@ pub enum Expression {
     InvokeStatic(Ident, TokenChain),
     InvokeInstance(Ident, TokenChain),
     InvokeBuiltin(Ident, TokenChain),
+    IfStmt,
+    ElseStmt,
+    ElifStmt,
+    WhileStmt
 }
 
 impl AllocSized for Expression {
@@ -28,6 +33,7 @@ impl AllocSized for Expression {
             Expression::InvokeStatic(i, p) => i.size() + p.size(),
             Expression::InvokeInstance(i, p) => i.size() + p.size(),
             Expression::InvokeBuiltin(i, p) => i.size() + p.size(),
+            _ => 0
         }
     }
 
@@ -67,6 +73,10 @@ impl AllocSized for Expression {
                 i.write(buf)?;
                 p.write(buf)?;
             }
+            Expression::IfStmt => 0x06u8.write(buf)?,
+            Expression::ElseStmt => 0x07u8.write(buf)?,
+            Expression::WhileStmt => 0x08u8.write(buf)?,
+            Expression::ElifStmt => 0x09u8.write(buf)?
         };
         Ok(())
     }
@@ -84,239 +94,33 @@ impl AllocSized for Expression {
             0x03 => Expression::InvokeStatic(Ident::read(buf)?, TokenChain::read(buf)?),
             0x04 => Expression::InvokeInstance(Ident::read(buf)?, TokenChain::read(buf)?),
             0x05 => Expression::InvokeBuiltin(Ident::read(buf)?, TokenChain::read(buf)?),
+            0x06 => Expression::IfStmt,
+            0x07 => Expression::ElseStmt,
+            0x08 => Expression::WhileStmt,
+            0x09 => Expression::ElifStmt,
             _ => bail!("Invalid expression provided!"),
         })
     }
 }
 
-//#region bits + bools
-macro_rules! _sh_impl {
-    ($visitor:ident $oper:tt $lh:ident $rh:ident) => {
-        let lh = match $lh {
-            Token::Literal(lit) => {
-                lit.to_owned()
-            }
-            Token::Expression(expr) => {
-                expr.visit($visitor)?;
-                $visitor.pop_stack()
-            }
-            _ => panic!("Invalid operand provided!")
-        };
-        let rh = match $rh {
-            Token::Literal(lit) => {
-                lit.to_owned()
-            }
-            Token::Expression(expr) => {
-                expr.visit($visitor)?;
-                $visitor.pop_stack()
-            }
-            _ => panic!("Invalid operand provided!")
-        };
-        let mut lh = if let Literal::Ident(name) = lh {
-            $visitor.resolve_any_var(name.as_str())
-        } else {
-            lh
-        };
-        let rh = if let Literal::Ident(name) = rh {
-            $visitor.resolve_any_var(name.as_str())
-        } else {
-            rh
-        };
-        let l = match &mut lh {
-            Literal::Number(lb) => {
-                if let Literal::Number(rb) = rh {
-                    Literal::Number(*lb $oper rb)
-                } else {
-                    panic!("Invalid operation provided!")
-                }
-            }
-            _ => panic!("Invalid operand provided!")
-        };
-        $visitor.push_stack(l);
-    }
-}
-
-macro_rules! _bit_impl {
-    ($visitor:ident $oper:tt $lh:ident $rh:ident) => {
-        let lh = match $lh {
-            Token::Literal(lit) => {
-                lit.to_owned()
-            }
-            Token::Expression(expr) => {
-                expr.visit($visitor)?;
-                $visitor.pop_stack()
-            }
-            _ => panic!("Invalid operand provided!")
-        };
-        let rh = match $rh {
-            Token::Literal(lit) => {
-                lit.to_owned()
-            }
-            Token::Expression(expr) => {
-                expr.visit($visitor)?;
-                $visitor.pop_stack()
-            }
-            _ => panic!("Invalid operand provided!")
-        };
-        let mut lh = if let Literal::Ident(name) = lh {
-            $visitor.resolve_any_var(name.as_str())
-        } else {
-            lh
-        };
-        let rh = if let Literal::Ident(name) = rh {
-            $visitor.resolve_any_var(name.as_str())
-        } else {
-            rh
-        };
-        let l = match &mut lh {
-            Literal::Bool(lb) => {
-                if let Literal::Bool(rb) = rh {
-                    Literal::Bool(*lb $oper rb)
-                } else {
-                    panic!("Invalid operand provided!")
-                }
-            }
-            _ => panic!("Invalid operand provided!")
-        };
-        $visitor.push_stack(l);
-    }
-}
-
-macro_rules! _bool_impl {
-    ($visitor:ident $oper:tt $lh:ident $rh:ident) => {
-        let lh = match $lh {
-            Token::Literal(lit) => {
-                lit.to_owned()
-            }
-            Token::Expression(expr) => {
-                expr.visit($visitor)?;
-                $visitor.pop_stack()
-            }
-            _ => panic!("Invalid operand provided!")
-        };
-        let rh = match $rh {
-            Token::Literal(lit) => {
-                lit.to_owned()
-            }
-            Token::Expression(expr) => {
-                expr.visit($visitor)?;
-                $visitor.pop_stack()
-            }
-            _ => panic!("Invalid operand provided!")
-        };
-        let mut lh = if let Literal::Ident(name) = lh {
-            $visitor.resolve_any_var(name.as_str())
-        } else {
-            lh
-        };
-        let rh = if let Literal::Ident(name) = rh {
-            $visitor.resolve_any_var(name.as_str())
-        } else {
-            rh
-        };
-        match &mut lh {
-            Literal::Bool(lb) => {
-                if let Literal::Bool(rb) = rh {
-                    Literal::Bool(*lb $oper rb)
-                } else {
-                    panic!("Invalid operand provided!")
-                }
-            }
-            _ => panic!("Invalid operand provided!")
+macro_rules! _tkbool {
+    ($tk:ident) => {
+        match $tk {
+            Literal::Number(n) => n != 0,
+            Literal::Bool(b) => b,
+            Literal::Void => false,
+            _ => true
         }
-    }
-}
-//#endregion bits + bools
-//#region binary expr impl
-macro_rules! _bin_expr_impl {
-    ($($str:literal)? $visitor:ident $oper:tt $lh:ident $rh:ident) => {
-        let lh = match $lh {
-            Token::Literal(lit) => {
-                lit.to_owned()
-            }
-            Token::Expression(expr) => {
-                expr.visit($visitor)?;
-                $visitor.pop_stack()
-            }
-            _ => panic!("Invalid operand provided!")
-        };
-        let rh = match $rh {
-            Token::Literal(lit) => {
-                lit.to_owned()
-            }
-            Token::Expression(expr) => {
-                expr.visit($visitor)?;
-                $visitor.pop_stack()
-            }
-            _ => panic!("Invalid operand provided!")
-        };
-        _visit_impl!($($str)? $visitor $oper lh, rh);
+    };
+    ($tk:expr) => {
+        match $tk {
+            Literal::Number(n) => n != 0,
+            Literal::Bool(b) => b,
+            Literal::Void => false,
+            _ => true
+        }
     };
 }
-
-macro_rules! _visit_impl {
-    ($($str:literal)? $visitor:ident $oper:tt $lh:ident, $rh:ident) => {
-        let mut lh = if let Literal::Ident(name) = $lh {
-            $visitor.resolve_any_var(name.to_owned().as_str())
-        } else {
-            $lh
-        };
-        let rh = if let Literal::Ident(name) = $rh {
-            $visitor.resolve_any_var(name.to_owned().as_str())
-        } else {
-            $rh
-        };
-        let d = match &mut lh {
-            $(
-            Literal::String(str) => {
-                let _ = $str;
-                match rh {
-                    Literal::Number(num) => {
-                        Literal::String(str.to_owned() $oper &num.to_string())
-                    }
-                    Literal::Float(f) => {
-                        Literal::String(str.to_owned() $oper &f.to_string())
-                    }
-                    Literal::String(rstr) => {
-                        Literal::String(str.to_owned() $oper &rstr)
-                    }
-                    Literal::Char(c) => {
-                        Literal::String(str.to_owned() $oper &c.to_string())
-                    }
-                    _ => panic!("Invalid operand provided!")
-                }
-            }
-            )?
-            Literal::Number(lnum) => {
-                if let Literal::Number(rnum) = rh {
-                    Literal::Number(*lnum $oper rnum)
-                } else {
-                    panic!("Invalid operand provided!")
-                }
-            }
-            Literal::Float(f) => {
-                if let Literal::Float(rnum) = rh {
-                    Literal::Float(*f $oper rnum)
-                } else {
-                    panic!("Invalid operand provided!")
-                }
-            }
-            $(
-            Literal::Char(c) => {
-                let _ = $str;
-                if let Literal::Char(ch) = rh {
-                    Literal::String(c.to_string() $oper &ch.to_string())
-                } else {
-                    panic!("Invalid operand provided!")
-                }
-            }
-            )?
-            _ => panic!("Invalid operand provided!")
-        };
-        $visitor.push_stack(d);
-    };
-}
-//#endregion binary expr impl
 
 macro_rules! _tk2lit {
     ($v:ident $visitor:ident) => {
@@ -337,67 +141,8 @@ impl Visitable for Expression {
         V: Visitor,
     {
         match self {
-            Expression::BinaryOp(op, lh, rh) => match op {
-                BinaryOp::Assign => {
-                    let lh = lh.as_lit("Expected a variable name to set!");
-                    if let Literal::Ident(lh) = lh {
-                        let rh = match rh {
-                            Token::Literal(lit) => lit.to_owned(),
-                            Token::Expression(expr) => {
-                                expr.visit(visitor)?;
-                                visitor.pop_stack()
-                            }
-                            _ => panic!("Invalid operand provided!"),
-                        };
-                        visitor.add_var(lh, rh);
-                    } else {
-                        panic!("Expected a variable name to set!")
-                    }
-                }
-                BinaryOp::Add => {
-                    _bin_expr_impl!("" visitor + lh rh);
-                }
-                BinaryOp::Sub => {
-                    _bin_expr_impl!(visitor - lh rh);
-                }
-                BinaryOp::Div => {
-                    _bin_expr_impl!(visitor / lh rh);
-                }
-                BinaryOp::Mul => {
-                    _bin_expr_impl!(visitor * lh rh);
-                }
-                BinaryOp::Mod => {
-                    _bin_expr_impl!(visitor % lh rh);
-                }
-                BinaryOp::And => {
-                    _bool_impl!(visitor && lh rh);
-                }
-                BinaryOp::Or => {
-                    _bool_impl!(visitor || lh rh);
-                }
-                BinaryOp::Eq => {
-                    _bool_impl!(visitor == lh rh);
-                }
-                BinaryOp::Neq => {
-                    _bool_impl!(visitor != lh rh);
-                }
-                BinaryOp::BitAnd => {
-                    _bit_impl!(visitor & lh rh);
-                }
-                BinaryOp::BitOr => {
-                    _bit_impl!(visitor | lh rh);
-                }
-                BinaryOp::BitXor => {
-                    _bit_impl!(visitor ^ lh rh);
-                }
-                BinaryOp::BitRsh => {
-                    _sh_impl!(visitor >> lh rh);
-                }
-                BinaryOp::BitLsh => {
-                    _sh_impl!(visitor << lh rh);
-                }
-            },
-            Expression::UnaryOp(op, v) => match op {
+            Expression::BinaryOp(op, lh, rh) => _binary_op_handler(visitor, op, lh, rh),
+            Expression::UnaryOp(op, v) => return match op {
                 UnaryOp::Neg => {
                     let lit = _tk2lit!(v visitor);
                     let l = match lit {
@@ -405,6 +150,7 @@ impl Visitable for Expression {
                         _ => panic!("Invalid literal provided!"),
                     };
                     visitor.push_stack(l);
+                    Ok(())
                 }
                 UnaryOp::Rev => {
                     let lit = _tk2lit!(v visitor);
@@ -414,6 +160,7 @@ impl Visitable for Expression {
                         _ => panic!("Invalid literal provided!"),
                     };
                     visitor.push_stack(l);
+                    Ok(())
                 }
             },
             Expression::StaticAccess(path) => {
@@ -434,13 +181,16 @@ impl Visitable for Expression {
                     let lit = visitor.resolve_any_var(&element);
                     visitor.push_stack(lit);
                 }
+                return Ok(())
             }
             Expression::InstanceAccess(_path) => {
                 // TODO
+                return Ok(())
             }
             Expression::InvokeStatic(path, params) => {
                 let lit = visitor.call_static_fn(path.to_owned(), params.to_vec());
                 visitor.push_stack(lit);
+                return Ok(())
             }
             Expression::InvokeInstance(path, params) => {
                 let old_params = params.clone();
@@ -463,6 +213,7 @@ impl Visitable for Expression {
                 };
                 let lit = visitor.call_inst_fn(path.to_owned(), str, old_params);
                 visitor.push_stack(lit);
+                return Ok(())
             }
             Expression::InvokeBuiltin(name, params) => {
                 let lit = find_builtin(name.to_owned()).call((params
@@ -470,8 +221,168 @@ impl Visitable for Expression {
                     .map(|it| it.as_lit_advanced(visitor, "Expected a literal-like!"))
                     .collect::<Parameters>(),));
                 visitor.push_stack(lit);
+                return Ok(())
+            }
+            Expression::IfStmt => _visit_if(visitor),
+            Expression::WhileStmt => {
+                let mut condition = visitor.next_token()?;
+
+                if _tkbool!(condition.as_lit_advanced(visitor, "Could not process while condition!")) {
+                    let _lbracket = visitor.next_token()?;
+                    let mut chain = TokenChain::new();
+                    while visitor.peek_token()? != Token::RBracket {
+                        chain.push(visitor.next_token()?);
+                    }
+
+                    chain.reverse();
+                    let _rbracket = visitor.next_token()?;
+
+                    while _tkbool!(condition.as_lit_advanced(visitor, "Could not process while condition!")) {
+                        for ele in &chain {
+                            visitor.insert_token(ele.to_owned(), 0);
+                        }
+                        visitor.process_until(chain.len());
+                    }
+                } else {
+                    visitor.push_stack(Literal::Void);
+                }
+                return Ok(())
+            }
+            _ => bail!("Unexpected unbounded {:?} token!", self),
+        }
+    }
+}
+
+fn _visit_if<V>(visitor: &mut V) -> anyhow::Result<()> where V: Visitor {
+    let mut next = visitor.next_token()?;
+    let next = next.as_lit_advanced(visitor, "Expected a literal-like statement!");
+    let boolean = match next {
+        Literal::Number(n) => n != 0,
+        Literal::Bool(b) => b,
+        Literal::Void => false,
+        _ => true
+    };
+    if boolean {
+        let _lbracket = visitor.next_token()?;
+        let mut chain = TokenChain::new();
+        while visitor.peek_token()? != Token::RBracket {
+            chain.push(visitor.next_token()?);
+        }
+
+        chain.reverse();
+        let len = chain.len();
+        for ele in chain {
+            visitor.insert_token(ele, 0);
+        }
+        let _rbracket = visitor.next_token()?;
+
+        visitor.process_until(len);
+
+
+        while let Ok(_)= &mut visitor.peek_token() {
+            let mut expr = visitor.peek_token()?;
+            if let Token::Expression(box expr) = &mut expr {
+                match expr {
+                    Expression::ElifStmt => {
+                        let _ = _visit_elif(visitor, true);
+                    }
+                    Expression::ElseStmt => {
+                        _visit_else(visitor, true)?;
+                    }
+                    _ => {}
+                }
+            } else {
+                break;
             }
         }
+    } else {
+        // consuming all the left over tokens from the `if` branch
+        let _lbracket = visitor.next_token()?;
+        while visitor.peek_token()? != Token::RBracket {
+            let _ = visitor.next_token()?;
+        }
+        let _rbracket = visitor.next_token()?;
+        // trying to find elif's and else's
+        let mut matched = false;
+        while let Ok(Token::Expression(expr)) = &mut visitor.peek_token() {
+            match expr {
+                box Expression::ElseStmt => {
+                    _visit_else(visitor, matched)?;
+                    return Ok(())
+                },
+                box Expression::ElifStmt => {
+                    let success = _visit_elif(visitor, matched);
+                    matched = success.is_ok();
+                },
+                _ => {
+                    visitor.push_stack(Literal::Void);
+                    return Ok(())
+                }
+            }
+        }
+
+    }
+    return Ok(())
+
+}
+
+fn _visit_else<V>(visitor: &mut V, matched: bool) -> anyhow::Result<()> where V: Visitor {
+    // consuming current token
+    let _ = visitor.next_token()?;
+    let _lbracket = visitor.next_token()?;
+    let mut chain = TokenChain::new();
+    while visitor.peek_token()? != Token::RBracket {
+        chain.push(visitor.next_token()?);
+    }
+    if matched {
+        // `if` branch already matched before, so just dropping all of our stuff
+        drop(chain);
+        let _rbracket = visitor.next_token()?;
+        return Ok(())
+    }
+
+    chain.reverse();
+    let len = chain.len();
+    for ele in chain {
+        visitor.insert_token(ele, 0);
+    }
+    visitor.process_until(len);
+    Ok(())
+}
+
+fn _visit_elif<V>(visitor: &mut V, matched: bool) -> anyhow::Result<()> where V: Visitor {
+    // consuming current token
+    let _ = visitor.next_token()?;
+    let mut next = visitor.next_token()?;
+    let next = next.as_lit_advanced(visitor, "Expected a boolean!");
+    let boolean = _tkbool!(next);
+    // consuming tokens, dropping them anyways if not needed
+    let _lbracket = visitor.next_token()?;
+    return if matched {
+        while visitor.peek_token()? != Token::RBracket {
+            let _ = visitor.next_token()?;
+        }
+        let _rbracket = visitor.next_token()?;
         Ok(())
+    } else {
+        let mut chain = TokenChain::new();
+        while visitor.peek_token()? != Token::RBracket {
+            chain.push(visitor.next_token()?);
+        }
+        if boolean {
+            chain.reverse();
+            let len = chain.len();
+            for ele in chain {
+                visitor.insert_token(ele, 0);
+            }
+
+            visitor.process_until(len);
+
+            let _rbracket = visitor.next_token()?;
+            Ok(())
+        } else {
+            let _rbracket = visitor.next_token()?;
+            bail!("exit");
+        }
     }
 }

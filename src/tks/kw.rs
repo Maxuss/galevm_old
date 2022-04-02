@@ -73,9 +73,8 @@ impl Visitable for Keyword {
                 }
             }
             Keyword::Let => {
-                if let Literal::Ident(name) = &mut visitor.pop_stack() {
-                    visitor.pop_stack().visit(visitor)?;
-                    let mut value = visitor.pop_stack();
+                if let Literal::Ident(name) = &mut visitor.next_token()?.as_lit("Expected a variable name!") {
+                    let mut value = visitor.next_token()?.as_lit_advanced(visitor, "Expected a variable value!");
                     match &mut value {
                         Literal::Number(num) => visitor.alloc_write(num)?,
                         Literal::Float(float) => visitor.alloc_write(float)?,
@@ -92,9 +91,8 @@ impl Visitable for Keyword {
                 }
             }
             Keyword::Const => {
-                if let Literal::Ident(name) = &mut visitor.pop_stack() {
-                    visitor.pop_stack().visit(visitor)?;
-                    let mut value = visitor.pop_stack();
+                if let Literal::Ident(name) = &mut visitor.next_token()?.as_lit("Expected a variable name!") {
+                    let mut value = visitor.next_token()?.as_lit_advanced(visitor, "Expected a variable value!");
                     match &mut value {
                         Literal::Number(num) => visitor.alloc_write(num)?,
                         Literal::Float(float) => visitor.alloc_write(float)?,

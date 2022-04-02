@@ -2,6 +2,7 @@ mod expr;
 mod kw;
 mod lit;
 mod ops;
+pub(crate) mod expr_handlers;
 
 pub use expr::*;
 pub use kw::*;
@@ -131,6 +132,18 @@ impl Token {
             }
             _ => panic!("{}", panic_msg),
         }
+    }
+
+    pub fn as_lit_no_ident<V>(&mut self, visitor: &mut V, panic_msg: &str) -> Literal where V: Visitor {
+        match self {
+            Token::Literal(lit) => lit.to_owned(),
+            Token::Expression(expr) => {
+                expr.visit(visitor).unwrap();
+                visitor.pop_stack()
+            }
+            _ => panic!("{}", panic_msg),
+        }
+
     }
 
     pub fn as_lit(&self, panic_msg: &str) -> Literal {

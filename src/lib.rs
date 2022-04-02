@@ -1,4 +1,5 @@
 #![feature(fn_traits)]
+#![feature(box_patterns)]
 
 extern crate core;
 
@@ -65,18 +66,19 @@ mod tests {
         // const constant = 200 + 300;
         // let mutable_var = "Hello, World!";
         let mut chain = vec![
+            Token::Keyword(Keyword::Const),
+            Token::Literal(Literal::Ident(String::from("constant"))),
             Token::Expression(Box::new(Expression::BinaryOp(
                 BinaryOp::Add,
                 Token::Literal(Literal::Number(200)),
                 Token::Literal(Literal::Number(300)),
             ))),
-            Token::Literal(Literal::Ident(String::from("constant"))),
-            Token::Keyword(Keyword::Const),
-            Token::Literal(Literal::String(String::from("Hello, World!"))),
-            Token::Literal(Literal::Ident(String::from("mutable_var"))),
             Token::Keyword(Keyword::Let),
+            Token::Literal(Literal::Ident(String::from("mutable_var"))),
+            Token::Literal(Literal::String(String::from("Hello, World!"))),
         ];
         vm.load_chain(&mut chain);
+        vm.process();
         vm.free(0, 23).unwrap();
         println!("{:#?}", vm);
     }
@@ -114,11 +116,6 @@ mod tests {
             ))),
             Token::Literal(Literal::Ident("greeting".to_string())),
             Token::Keyword(Keyword::Let),
-            Token::Expression(Box::new(Expression::BinaryOp(
-                BinaryOp::Assign,
-                Token::Literal(Literal::Ident("greeting".to_string())),
-                Token::Literal(Literal::String("penis".to_string()))
-            ))),
             Token::Expression(Box::new(Expression::InvokeBuiltin(
                 "println".to_string(),
                 vec![Token::Literal(Literal::Ident("greeting".to_string()))],
@@ -130,6 +127,79 @@ mod tests {
                 "global::say_hello".to_string(),
                 vec![Token::Literal(Literal::String("World!".to_string()))],
             ))),
+        ];
+        let start = Instant::now();
+        vm.load_chain(&mut chain);
+        vm.process();
+        let dur = Instant::now() - start;
+        println!("Finished in {} mcs", dur.as_micros())
+    }
+
+    #[test]
+    fn test_if_else_elif() {
+        let mut vm = Vm::new();
+        let mut chain = vec![
+            Token::Expression(Box::new(Expression::IfStmt)),
+            Token::Literal(Literal::Bool(false)),
+            Token::LBracket,
+            Token::Expression(Box::new(Expression::InvokeBuiltin(
+                "println".to_string(),
+                vec![Token::Literal(Literal::String("If executed!".to_string()))],
+            ))),
+            Token::RBracket,
+            Token::Expression(Box::new(Expression::ElifStmt)),
+            Token::Literal(Literal::Bool(true)),
+            Token::LBracket,
+            Token::Expression(Box::new(Expression::InvokeBuiltin(
+                "println".to_string(),
+                vec![Token::Literal(Literal::String("Elif executed!".to_string()))],
+            ))),
+            Token::RBracket,
+            Token::Expression(Box::new(Expression::ElseStmt)),
+            Token::LBracket,
+            Token::Expression(Box::new(Expression::InvokeBuiltin(
+                "println".to_string(),
+                vec![Token::Literal(Literal::String("Else executed!".to_string()))],
+            ))),
+            Token::RBracket
+        ];
+        let start = Instant::now();
+        vm.load_chain(&mut chain);
+        vm.process();
+        let dur = Instant::now() - start;
+        println!("Finished in {} mcs", dur.as_micros())
+    }
+
+    #[test]
+    fn test_while() {
+        let mut vm = Vm::new();
+        let mut chain = vec![
+            Token::Keyword(Keyword::Let),
+            Token::Literal(Literal::Ident("i".to_string())),
+            Token::Literal(Literal::Number(0)),
+            Token::Expression(Box::new(Expression::WhileStmt)),
+            Token::Expression(Box::new(Expression::BinaryOp(BinaryOp::Lt, Token::Literal(
+                Literal::Ident("i".to_string())), Token::Literal(Literal::Number(10))))),
+            Token::LBracket,
+            Token::Expression(Box::new(
+                Expression::BinaryOp(
+                    BinaryOp::Assign,
+                    Token::Literal(
+                        Literal::Ident("i".to_string())
+                    ),
+                    Token::Expression(
+                        Box::new(
+                            Expression::BinaryOp(
+                                BinaryOp::Add,
+                                Token::Literal(Literal::Ident("i".to_string())),
+                                Token::Literal(Literal::Number(1))
+                            )))
+                ))),
+            Token::Expression(Box::new(Expression::InvokeBuiltin(
+                "debug".to_string(),
+                vec![Token::Literal(Literal::Ident("i".to_string()))]
+            ))),
+            Token::RBracket
         ];
         let start = Instant::now();
         vm.load_chain(&mut chain);

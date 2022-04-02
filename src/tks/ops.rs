@@ -13,6 +13,8 @@ pub enum BinaryOp {
     And,    // &&
     Or,     // ||
     Eq,     // ==
+    Lt,     // <
+    Gt,     // >
     Neq,    // !=
     BitAnd, // &
     BitOr,  // |
@@ -43,6 +45,8 @@ impl AllocSized for BinaryOp {
             BinaryOp::BitXor => 0x0C,
             BinaryOp::BitRsh => 0x0D,
             BinaryOp::BitLsh => 0x0E,
+            BinaryOp::Lt => 0x0F,
+            BinaryOp::Gt => 0x10,
         }
         .write(buf)
     }
@@ -67,6 +71,8 @@ impl AllocSized for BinaryOp {
             0x0C => BinaryOp::BitXor,
             0x0D => BinaryOp::BitRsh,
             0x0E => BinaryOp::BitLsh,
+            0x0F => BinaryOp::Lt,
+            0x10 => BinaryOp::Gt,
             _ => bail!("Invalid binary operator provided!"),
         })
     }

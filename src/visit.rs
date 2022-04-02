@@ -6,6 +6,7 @@ use crate::ToResult;
 use std::collections::{HashMap, VecDeque};
 use std::io::Cursor;
 use std::sync::{Arc, Mutex};
+use anyhow::bail;
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Scope {
@@ -19,6 +20,7 @@ pub trait TokenProvider {
     fn next_token(&mut self) -> anyhow::Result<Token>;
     fn peek_token(&mut self) -> anyhow::Result<Token>;
     fn add_token(&mut self, tk: Token);
+    fn insert_token(&mut self, tk: Token, at: usize);
 }
 
 pub trait Visitor: Memory + TokenProvider + Clone {
@@ -68,6 +70,8 @@ pub trait Visitor: Memory + TokenProvider + Clone {
     fn call_static_fn(&mut self, name: String, params: TokenChain) -> Literal;
 
     fn process(&mut self);
+
+    fn process_until(&mut self, until: usize);
 
     fn resolve_any_var(&self, name: &str) -> Literal {
         let var = self.resolve_var(name);
@@ -224,19 +228,22 @@ impl TokenProvider for Vm {
     }
 
     fn peek_token(&mut self) -> anyhow::Result<Token> {
-        Ok(self
-            .tks
-            .iter()
-            .rev()
-            .peekable()
-            .peek()
-            .unwrap()
-            .to_owned()
-            .to_owned())
+        let tks = self.tks.clone();
+        let mut iter = tks.iter().rev().peekable();
+        let peek = iter.peek();
+        if peek.is_some() {
+            Ok(peek.unwrap().to_owned().to_owned())
+        } else {
+            bail!("No tokens provided!")
+        }
     }
 
     fn add_token(&mut self, tk: Token) {
         self.tks.push_front(tk)
+    }
+
+    fn insert_token(&mut self, tk: Token, at: usize) {
+        self.tks.insert(at, tk);
     }
 }
 
@@ -435,6 +442,19 @@ impl Visitor for Vm {
     fn process(&mut self) {
         while let Some(tk) = &mut self.tks.pop_back() {
             self.visit(tk)
+        }
+    }
+
+    fn process_until(&mut self, until: usize) {
+        let mut amount = 0;
+        let actual_amount = if until <= 0 { until } else { until - 1 };
+        while let Some(tk) = &mut self.tks.pop_front() {
+            if amount > actual_amount {
+                self.tks.push_front(tk.to_owned());
+                return;
+            }
+            self.visit(tk);
+            amount += 1;
         }
     }
 }
