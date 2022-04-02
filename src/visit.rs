@@ -1,10 +1,8 @@
 use crate::structs::Structure;
 use crate::tks::{Literal, Token, TokenChain};
 use crate::var::{ContainingScope, ScopedValue};
-use crate::vm::{AllocSized, ConstSized, Memory};
 use crate::ToResult;
 use std::collections::{HashMap, VecDeque};
-use std::io::Cursor;
 use std::sync::{Arc, Mutex};
 use anyhow::bail;
 
@@ -23,7 +21,7 @@ pub trait TokenProvider {
     fn insert_token(&mut self, tk: Token, at: usize);
 }
 
-pub trait Visitor: Memory + TokenProvider + Clone {
+pub trait Visitor:  TokenProvider + Clone {
     fn push_stack(&mut self, value: Literal);
     fn pop_stack(&mut self) -> Literal;
     fn resolve_var(&self, name: &str) -> anyhow::Result<Literal>;
@@ -105,7 +103,6 @@ pub trait Visitable {
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub struct Vm {
-    mem: Vec<u8>,
     free: usize,
     pos: usize,
     tks: VecDeque<Token>,
@@ -118,7 +115,6 @@ pub struct Vm {
 impl Vm {
     pub fn new() -> Self {
         Self {
-            mem: vec![],
             free: 0,
             pos: 0,
             tks: VecDeque::new(),
@@ -157,68 +153,6 @@ impl Vm {
             }
         }
         current
-    }
-}
-
-impl Memory for Vm {
-    fn jump(&mut self, pos: usize) -> anyhow::Result<()> {
-        self.pos = pos;
-        Ok(())
-    }
-
-    fn alloc(&mut self, amount: usize) -> anyhow::Result<usize> {
-        self.mem.extend(vec![0u8; amount]);
-        self.free += amount;
-        Ok(self.pos)
-    }
-
-    fn write<A>(&mut self, ptr: usize, value: &mut A) -> anyhow::Result<()>
-    where
-        A: AllocSized,
-    {
-        self.jump(ptr)?;
-        let size = value.size();
-        let mut slice = self.mem[ptr..ptr + size].to_vec();
-        value.write(&mut slice)?;
-        self.mem.splice(ptr..ptr + size, slice);
-        self.free -= size;
-        Ok(())
-    }
-
-    fn alloc_write<A>(&mut self, value: &mut A) -> anyhow::Result<usize>
-    where
-        A: AllocSized,
-    {
-        self.alloc(value.size())?;
-        self.write(self.pos, value)?;
-        Ok(self.pos)
-    }
-
-    fn read_dynamic<A>(&mut self, ptr: usize) -> anyhow::Result<A>
-    where
-        A: AllocSized,
-    {
-        let mut slice = Cursor::new(self.mem[ptr..].to_vec());
-        self.jump(ptr)?;
-        let value = A::read(&mut slice)?;
-        drop(slice);
-        Ok(value)
-    }
-
-    fn read_const<A>(&mut self, ptr: usize) -> anyhow::Result<A>
-    where
-        A: ConstSized + AllocSized,
-    {
-        let mut slice = Cursor::new(self.mem[ptr..(ptr + A::const_size())].to_vec());
-        self.jump(ptr)?;
-        let value = A::read(&mut slice)?;
-        drop(slice);
-        Ok(value)
-    }
-
-    fn free(&mut self, ptr: usize, amount: usize) -> anyhow::Result<()> {
-        self.mem.drain(ptr..ptr + amount);
-        Ok(())
     }
 }
 

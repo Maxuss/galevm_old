@@ -2,7 +2,7 @@ use crate::structs::Structure;
 use crate::tks::{Literal, TokenChain};
 use crate::var::ContainingScope;
 use crate::visit::{Scope, Visitor};
-use crate::vm::AllocSized;
+use crate::vm::Transmute;
 use rand::RngCore;
 use std::fmt::Debug;
 use std::io::Cursor;
@@ -16,7 +16,7 @@ pub struct InstFn {
     chain: TokenChain,
 }
 
-impl AllocSized for InstFn {
+impl Transmute for InstFn {
     fn size(&mut self) -> usize {
         self.out_ty.size() + self.param_names.len() + 4 + self.chain.len()
     }
@@ -47,7 +47,7 @@ pub struct StaticFn {
     chain: TokenChain,
 }
 
-impl AllocSized for StaticFn {
+impl Transmute for StaticFn {
     fn size(&mut self) -> usize {
         self.out_ty.size() + self.param_names.len() + 4 + self.chain.len()
     }

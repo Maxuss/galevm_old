@@ -3,7 +3,7 @@ use crate::fns::Parameters;
 use crate::tks::{BinaryOp, Ident, Literal, Token, TokenChain, UnaryOp};
 use crate::var::ScopedValue;
 use crate::visit::{Visitable, Visitor};
-use crate::vm::AllocSized;
+use crate::vm::Transmute;
 use anyhow::bail;
 use std::io::Cursor;
 use crate::tks::expr_handlers::_binary_op_handler;
@@ -23,7 +23,7 @@ pub enum Expression {
     WhileStmt
 }
 
-impl AllocSized for Expression {
+impl Transmute for Expression {
     fn size(&mut self) -> usize {
         0x01 + match self {
             Expression::BinaryOp(op, l, r) => op.size() + l.size() + r.size(),
@@ -201,11 +201,6 @@ impl Visitable for Expression {
                 let str = params.get(0).unwrap();
                 let str = match str {
                     Literal::Struct(str) => str.to_owned(),
-                    Literal::Number(ptr) => Box::new(
-                        visitor
-                            .read_dynamic(*ptr as usize)
-                            .expect(&format!("Did not find structure at {}", ptr)),
-                    ),
                     _ => panic!(
                         "Expected a structure or structure pointer, got {:?}!",
                         str.clone()

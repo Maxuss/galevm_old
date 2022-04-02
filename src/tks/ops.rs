@@ -1,4 +1,4 @@
-use crate::vm::AllocSized;
+use crate::vm::Transmute;
 use anyhow::bail;
 use std::io::Cursor;
 
@@ -23,7 +23,7 @@ pub enum BinaryOp {
     BitLsh, // <<
 }
 
-impl AllocSized for BinaryOp {
+impl Transmute for BinaryOp {
     fn size(&mut self) -> usize {
         1
     }
@@ -84,7 +84,7 @@ pub enum UnaryOp {
     Rev, // ~
 }
 
-impl AllocSized for UnaryOp {
+impl Transmute for UnaryOp {
     fn size(&mut self) -> usize {
         1
     }

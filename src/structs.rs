@@ -2,7 +2,7 @@ use crate::fns::Parameters;
 use crate::tks::{Literal, TokenChain};
 use crate::var::ContainingScope;
 use crate::visit::Visitor;
-use crate::vm::AllocSized;
+use crate::vm::Transmute;
 use std::io::Cursor;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -12,7 +12,7 @@ pub struct Structure {
     scope: ContainingScope,
 }
 
-impl AllocSized for Structure {
+impl Transmute for Structure {
     fn size(&mut self) -> usize {
         self.typename.size() + self.scope.size()
     }

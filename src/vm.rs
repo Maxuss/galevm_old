@@ -1,11 +1,11 @@
 use std::io::{Cursor, Read};
 use std::mem;
 
-pub trait ConstSized {
+pub trait TransmuteConst {
     fn const_size() -> usize;
 }
 
-pub trait AllocSized {
+pub trait Transmute {
     fn size(&mut self) -> usize;
     fn write(&mut self, buf: &mut Vec<u8>) -> anyhow::Result<()>;
     fn read(buf: &mut Cursor<Vec<u8>>) -> anyhow::Result<Self>
@@ -16,13 +16,13 @@ pub trait AllocSized {
 macro_rules! _int_alloc_impl {
     ($($typ:ident),* $(,)*) => {
         $(
-            impl ConstSized for $typ {
+            impl TransmuteConst for $typ {
                 fn const_size() -> usize {
                     mem::size_of::<$typ>()
                 }
             }
 
-            impl AllocSized for $typ {
+            impl Transmute for $typ {
                 fn size(&mut self) -> usize {
                     mem::size_of::<$typ>()
                 }
@@ -48,25 +48,25 @@ _int_alloc_impl! {
     i8, i16, i32, i64, i128
 }
 
-impl ConstSized for f32 {
+impl TransmuteConst for f32 {
     fn const_size() -> usize {
         4
     }
 }
 
-impl ConstSized for bool {
+impl TransmuteConst for bool {
     fn const_size() -> usize {
         1
     }
 }
 
-impl ConstSized for f64 {
+impl TransmuteConst for f64 {
     fn const_size() -> usize {
         8
     }
 }
 
-impl AllocSized for bool {
+impl Transmute for bool {
     fn size(&mut self) -> usize {
         1
     }
@@ -86,7 +86,7 @@ impl AllocSized for bool {
     }
 }
 
-impl AllocSized for f32 {
+impl Transmute for f32 {
     fn size(&mut self) -> usize {
         4
     }
@@ -106,7 +106,7 @@ impl AllocSized for f32 {
     }
 }
 
-impl AllocSized for f64 {
+impl Transmute for f64 {
     fn size(&mut self) -> usize {
         8
     }
@@ -126,7 +126,7 @@ impl AllocSized for f64 {
     }
 }
 
-impl AllocSized for String {
+impl Transmute for String {
     fn size(&mut self) -> usize {
         self.len() + 2
     }
@@ -146,13 +146,13 @@ impl AllocSized for String {
     }
 }
 
-impl ConstSized for char {
+impl TransmuteConst for char {
     fn const_size() -> usize {
         4
     }
 }
 
-impl AllocSized for char {
+impl Transmute for char {
     fn size(&mut self) -> usize {
         4
     }
@@ -174,9 +174,9 @@ impl AllocSized for char {
     }
 }
 
-impl<V> AllocSized for Box<V>
+impl<V> Transmute for Box<V>
 where
-    V: AllocSized,
+    V: Transmute,
 {
     fn size(&mut self) -> usize {
         V::size(self)
@@ -194,9 +194,9 @@ where
     }
 }
 
-impl<V> AllocSized for Vec<V>
+impl<V> Transmute for Vec<V>
 where
-    V: AllocSized,
+    V: Transmute,
 {
     fn size(&mut self) -> usize {
         self.len() + 4
@@ -221,22 +221,4 @@ where
         }
         Ok(vec)
     }
-}
-
-pub trait Memory {
-    fn jump(&mut self, pos: usize) -> anyhow::Result<()>;
-    fn alloc(&mut self, amount: usize) -> anyhow::Result<usize>;
-    fn write<A>(&mut self, ptr: usize, value: &mut A) -> anyhow::Result<()>
-    where
-        A: AllocSized;
-    fn alloc_write<A>(&mut self, value: &mut A) -> anyhow::Result<usize>
-    where
-        A: AllocSized;
-    fn read_dynamic<A>(&mut self, ptr: usize) -> anyhow::Result<A>
-    where
-        A: AllocSized;
-    fn read_const<A>(&mut self, ptr: usize) -> anyhow::Result<A>
-    where
-        A: ConstSized + AllocSized;
-    fn free(&mut self, ptr: usize, amount: usize) -> anyhow::Result<()>;
 }

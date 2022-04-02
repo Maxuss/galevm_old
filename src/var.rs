@@ -1,7 +1,7 @@
 use crate::fns::{InstFn, StaticFn};
 use crate::structs::Structure;
 use crate::tks::{Literal, TokenChain};
-use crate::vm::AllocSized;
+use crate::vm::Transmute;
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::mem;
@@ -18,9 +18,9 @@ fn _write_str(str: &String, buf: &mut Vec<u8>) -> anyhow::Result<()> {
     Ok(())
 }
 
-impl<V> AllocSized for HashMap<String, V>
+impl<V> Transmute for HashMap<String, V>
 where
-    V: AllocSized,
+    V: Transmute,
 {
     fn size(&mut self) -> usize {
         let mut s = 0;
@@ -71,7 +71,7 @@ pub struct ContainingScope {
     structs: HashMap<String, Box<Structure>>,
 }
 
-impl AllocSized for ContainingScope {
+impl Transmute for ContainingScope {
     fn size(&mut self) -> usize {
         self.mutables.size()
             + self.consts.size()

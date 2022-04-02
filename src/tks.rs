@@ -10,7 +10,7 @@ pub use lit::*;
 pub use ops::*;
 
 use crate::visit::{Visitable, Visitor};
-use crate::vm::AllocSized;
+use crate::vm::Transmute;
 use anyhow::bail;
 use std::io::Cursor;
 
@@ -32,7 +32,7 @@ pub enum Token {
     End,
 }
 
-impl AllocSized for Token {
+impl Transmute for Token {
     fn size(&mut self) -> usize {
         1 + match self {
             Token::Whitespace => 0,

@@ -1,6 +1,6 @@
 use crate::tks::{Ident, Literal, Token, TokenChain};
 use crate::visit::{Scope, Visitable, Visitor};
-use crate::vm::AllocSized;
+use crate::vm::Transmute;
 use std::io::Cursor;
 use anyhow::bail;
 
@@ -15,7 +15,7 @@ pub enum Keyword {
     Return,   // return
 }
 
-impl AllocSized for Keyword {
+impl Transmute for Keyword {
     fn size(&mut self) -> usize {
         1
     }
@@ -74,17 +74,7 @@ impl Visitable for Keyword {
             }
             Keyword::Let => {
                 if let Literal::Ident(name) = &mut visitor.next_token()?.as_lit("Expected a variable name!") {
-                    let mut value = visitor.next_token()?.as_lit_advanced(visitor, "Expected a variable value!");
-                    match &mut value {
-                        Literal::Number(num) => visitor.alloc_write(num)?,
-                        Literal::Float(float) => visitor.alloc_write(float)?,
-                        Literal::String(str) => visitor.alloc_write(str)?,
-                        Literal::Char(char) => visitor.alloc_write(char)?,
-                        Literal::Ident(ident) => visitor.alloc_write(ident)?,
-                        Literal::TypeName(tt) => visitor.alloc_write(tt)?,
-                        Literal::Bool(bool) => visitor.alloc_write(bool)?,
-                        _ => 0,
-                    };
+                    let value = visitor.next_token()?.as_lit_advanced(visitor, "Expected a variable value!");
                     visitor.add_var(name.to_owned(), value)
                 } else {
                     panic!("Expected an ident name for variable!")
@@ -92,17 +82,7 @@ impl Visitable for Keyword {
             }
             Keyword::Const => {
                 if let Literal::Ident(name) = &mut visitor.next_token()?.as_lit("Expected a variable name!") {
-                    let mut value = visitor.next_token()?.as_lit_advanced(visitor, "Expected a variable value!");
-                    match &mut value {
-                        Literal::Number(num) => visitor.alloc_write(num)?,
-                        Literal::Float(float) => visitor.alloc_write(float)?,
-                        Literal::String(str) => visitor.alloc_write(str)?,
-                        Literal::Char(char) => visitor.alloc_write(char)?,
-                        Literal::Ident(ident) => visitor.alloc_write(ident)?,
-                        Literal::TypeName(tt) => visitor.alloc_write(tt)?,
-                        Literal::Bool(bool) => visitor.alloc_write(bool)?,
-                        _ => 0,
-                    };
+                    let value = visitor.next_token()?.as_lit_advanced(visitor, "Expected a variable value!");
                     visitor.add_const(name.to_owned(), value);
                 }
             }

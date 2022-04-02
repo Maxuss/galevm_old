@@ -37,18 +37,6 @@ mod tests {
     use crate::structs::Structure;
     use crate::tks::{BinaryOp, Expression, Keyword, Literal, Token};
     use crate::visit::{Visitor, Vm};
-    use crate::vm::Memory;
-
-    #[test]
-    fn test_ptrs() -> anyhow::Result<()> {
-        let mut vm = Vm::new();
-        let ptr = vm.alloc(8)?; // allocating size of u64
-        vm.write(ptr, &mut 120000u64)?; // writing the value
-        let value: u64 = vm.read_const(ptr)?; // reading the value
-        assert_eq!(value, 120000);
-        vm.free(ptr, 8)?; // freeing memory from vm
-        Ok(())
-    }
 
     #[test]
     fn test_exprs() {
@@ -79,7 +67,6 @@ mod tests {
         ];
         vm.load_chain(&mut chain);
         vm.process();
-        vm.free(0, 23).unwrap();
         println!("{:#?}", vm);
     }
 
@@ -206,5 +193,35 @@ mod tests {
         vm.process();
         let dur = Instant::now() - start;
         println!("Finished in {} mcs", dur.as_micros())
+    }
+
+    #[test]
+    fn test_transmute() {
+        let mut vm = Vm::new();
+        let mut chain = vec![
+            Token::Keyword(Keyword::Let),
+            Token::Literal(Literal::Ident("first".to_string())),
+            Token::Literal(Literal::Number(120000)),
+            Token::Keyword(Keyword::Let),
+            Token::Literal(Literal::Ident("second".to_string())),
+            Token::Expression(Box::new(Expression::InvokeBuiltin("transmute".to_string(), vec![
+                Token::Literal(Literal::Ident("first".to_string())),
+                Token::Literal(Literal::TypeName("float".to_string()))
+            ]))),
+            Token::Expression(Box::new(Expression::InvokeBuiltin(
+                "debug".to_string(),
+                vec![Token::Literal(Literal::Ident("first".to_string()))]
+            ))),
+            Token::Expression(Box::new(Expression::InvokeBuiltin(
+                "debug".to_string(),
+                vec![Token::Literal(Literal::Ident("second".to_string()))]
+            )))
+        ];
+        let start = Instant::now();
+        vm.load_chain(&mut chain);
+        vm.process();
+        let dur = Instant::now() - start;
+        println!("Finished in {} mcs", dur.as_micros())
+
     }
 }

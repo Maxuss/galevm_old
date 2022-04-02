@@ -1,7 +1,7 @@
 use crate::structs::Structure;
 use crate::tks::Ident;
 use crate::visit::{Visitable, Visitor};
-use crate::vm::AllocSized;
+use crate::vm::Transmute;
 use std::fmt::{Display, Formatter};
 use std::io::Cursor;
 
@@ -18,7 +18,7 @@ pub enum Literal {
     Void,
 }
 
-impl AllocSized for Literal {
+impl Transmute for Literal {
     fn size(&mut self) -> usize {
         1 + match self {
             Literal::Number(v) => v.size(),
