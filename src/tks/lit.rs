@@ -108,6 +108,20 @@ impl Display for Literal {
 }
 
 impl Literal {
+    pub fn this_type(&self) -> String {
+        match self {
+            Literal::Number(_) => "num",
+            Literal::Float(_) => "float",
+            Literal::String(_) => "str",
+            Literal::Char(_) => "char",
+            Literal::Ident(_) => "void",
+            Literal::Bool(_) => "bool",
+            Literal::TypeName(_) => "typename",
+            Literal::Struct(str) => str.typename(),
+            Literal::Void => "void"
+        }.to_string()
+    }
+
     pub fn type_str(&self, tn: &str) -> bool {
         match self {
             Literal::Number(_) => tn == "num",

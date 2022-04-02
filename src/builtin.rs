@@ -13,10 +13,15 @@ pub fn find_builtin(name: String) -> impl Fn(Parameters) -> Literal {
         "print" => _print,
         "println" => _println,
         "transmute" => _transmute,
+        "typeof" => _typeof,
         _ => {
             panic!("Tried to call unknown builtin function {}!", name)
         }
     }
+}
+
+fn _typeof(params: Parameters) -> Literal {
+    Literal::TypeName(params.get(0).unwrap().this_type())
 }
 
 fn _print(params: Parameters) -> Literal {
