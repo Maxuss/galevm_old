@@ -2,9 +2,9 @@ use crate::structs::Structure;
 use crate::tks::{Literal, Token, TokenChain};
 use crate::var::{ContainingScope, ScopedValue};
 use crate::ToResult;
+use anyhow::bail;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
-use anyhow::bail;
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Scope {
@@ -21,7 +21,7 @@ pub trait TokenProvider {
     fn insert_token(&mut self, tk: Token, at: usize);
 }
 
-pub trait Visitor:  TokenProvider + Clone {
+pub trait Visitor: TokenProvider + Clone {
     fn push_stack(&mut self, value: Literal);
     fn pop_stack(&mut self) -> Literal;
     fn resolve_var(&self, name: &str) -> anyhow::Result<Literal>;
@@ -235,17 +235,21 @@ impl Visitor for Vm {
     }
 
     fn import(&mut self, from: String, name: String) {
-        self.scopes.get(&self.current_scope)
+        self.scopes
+            .get(&self.current_scope)
             .unwrap()
             .lock()
-            .unwrap().import(&from, &name);
+            .unwrap()
+            .import(&from, &name);
     }
 
     fn export(&mut self, name: String) {
-        self.scopes.get(&self.current_scope)
+        self.scopes
+            .get(&self.current_scope)
             .unwrap()
             .lock()
-            .unwrap().export(&name);
+            .unwrap()
+            .export(&name);
     }
 
     fn add_var(&mut self, name: String, var: Literal) {
@@ -357,7 +361,12 @@ impl Visitor for Vm {
             let split = name.split("::").collect::<Vec<&str>>();
             let scope = split.get(0).unwrap().to_string();
             let fnc = split.get(1).unwrap().to_string();
-            let fnc = self.get_scope(scope.to_owned()).lock().unwrap().get_static_fn(&fnc).unwrap();
+            let fnc = self
+                .get_scope(scope.to_owned())
+                .lock()
+                .unwrap()
+                .get_static_fn(&fnc)
+                .unwrap();
             fnc.call(params, self)
         } else {
             let fnc = self

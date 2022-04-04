@@ -1,6 +1,6 @@
-use anyhow::bail;
 use crate::tks::{BinaryOp, Literal, Token};
 use crate::visit::{Visitable, Visitor};
+use anyhow::bail;
 
 //#region bits + bools
 macro_rules! _sh_impl {
@@ -283,7 +283,15 @@ macro_rules! _lt_gt_impl {
 }
 //#endregion binary expr impl
 
-pub(crate) fn _binary_op_handler<V>(visitor: &mut V, op: &mut BinaryOp, lh: &mut Token, rh: &mut Token) -> anyhow::Result<()> where V: Visitor {
+pub(crate) fn _binary_op_handler<V>(
+    visitor: &mut V,
+    op: &mut BinaryOp,
+    lh: &mut Token,
+    rh: &mut Token,
+) -> anyhow::Result<()>
+where
+    V: Visitor,
+{
     match op {
         BinaryOp::Assign => {
             let lh = lh.as_lit("Expected a variable name to set!");

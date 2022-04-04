@@ -1,8 +1,8 @@
 use crate::tks::{Ident, Literal, Token, TokenChain};
 use crate::visit::{Scope, Visitable, Visitor};
 use crate::vm::Transmute;
-use std::io::Cursor;
 use anyhow::bail;
+use std::io::Cursor;
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Keyword {
@@ -67,22 +67,33 @@ impl Visitable for Keyword {
             Keyword::Import => {
                 if let Literal::Ident(name) = &mut visitor.pop_stack() {
                     let split: Vec<&str> = name.split("::").collect();
-                    visitor.import(split.get(0).unwrap().to_string(), split.get(1).unwrap().to_string());
+                    visitor.import(
+                        split.get(0).unwrap().to_string(),
+                        split.get(1).unwrap().to_string(),
+                    );
                 } else {
                     bail!("Expected an ident to be imported!")
                 }
             }
             Keyword::Let => {
-                if let Literal::Ident(name) = &mut visitor.next_token()?.as_lit("Expected a variable name!") {
-                    let value = visitor.next_token()?.as_lit_advanced(visitor, "Expected a variable value!");
+                if let Literal::Ident(name) =
+                    &mut visitor.next_token()?.as_lit("Expected a variable name!")
+                {
+                    let value = visitor
+                        .next_token()?
+                        .as_lit_advanced(visitor, "Expected a variable value!");
                     visitor.add_var(name.to_owned(), value)
                 } else {
                     panic!("Expected an ident name for variable!")
                 }
             }
             Keyword::Const => {
-                if let Literal::Ident(name) = &mut visitor.next_token()?.as_lit("Expected a variable name!") {
-                    let value = visitor.next_token()?.as_lit_advanced(visitor, "Expected a variable value!");
+                if let Literal::Ident(name) =
+                    &mut visitor.next_token()?.as_lit("Expected a variable name!")
+                {
+                    let value = visitor
+                        .next_token()?
+                        .as_lit_advanced(visitor, "Expected a variable value!");
                     visitor.add_const(name.to_owned(), value);
                 }
             }

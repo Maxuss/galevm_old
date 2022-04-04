@@ -1,12 +1,12 @@
 use crate::builtin::find_builtin;
 use crate::fns::Parameters;
+use crate::tks::expr_handlers::_binary_op_handler;
 use crate::tks::{BinaryOp, Ident, Literal, Token, TokenChain, UnaryOp};
 use crate::var::ScopedValue;
 use crate::visit::{Visitable, Visitor};
 use crate::vm::Transmute;
 use anyhow::bail;
 use std::io::Cursor;
-use crate::tks::expr_handlers::_binary_op_handler;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
@@ -20,7 +20,7 @@ pub enum Expression {
     IfStmt,
     ElseStmt,
     ElifStmt,
-    WhileStmt
+    WhileStmt,
 }
 
 impl Transmute for Expression {
@@ -33,7 +33,7 @@ impl Transmute for Expression {
             Expression::InvokeStatic(i, p) => i.size() + p.size(),
             Expression::InvokeInstance(i, p) => i.size() + p.size(),
             Expression::InvokeBuiltin(i, p) => i.size() + p.size(),
-            _ => 0
+            _ => 0,
         }
     }
 
@@ -76,7 +76,7 @@ impl Transmute for Expression {
             Expression::IfStmt => 0x06u8.write(buf)?,
             Expression::ElseStmt => 0x07u8.write(buf)?,
             Expression::WhileStmt => 0x08u8.write(buf)?,
-            Expression::ElifStmt => 0x09u8.write(buf)?
+            Expression::ElifStmt => 0x09u8.write(buf)?,
         };
         Ok(())
     }
@@ -109,7 +109,7 @@ macro_rules! _tkbool {
             Literal::Number(n) => n != 0,
             Literal::Bool(b) => b,
             Literal::Void => false,
-            _ => true
+            _ => true,
         }
     };
     ($tk:expr) => {
@@ -117,7 +117,7 @@ macro_rules! _tkbool {
             Literal::Number(n) => n != 0,
             Literal::Bool(b) => b,
             Literal::Void => false,
-            _ => true
+            _ => true,
         }
     };
 }
@@ -142,27 +142,29 @@ impl Visitable for Expression {
     {
         match self {
             Expression::BinaryOp(op, lh, rh) => _binary_op_handler(visitor, op, lh, rh),
-            Expression::UnaryOp(op, v) => return match op {
-                UnaryOp::Neg => {
-                    let lit = _tk2lit!(v visitor);
-                    let l = match lit {
-                        Literal::Bool(b) => Literal::Bool(!b),
-                        _ => panic!("Invalid literal provided!"),
-                    };
-                    visitor.push_stack(l);
-                    Ok(())
+            Expression::UnaryOp(op, v) => {
+                return match op {
+                    UnaryOp::Neg => {
+                        let lit = _tk2lit!(v visitor);
+                        let l = match lit {
+                            Literal::Bool(b) => Literal::Bool(!b),
+                            _ => panic!("Invalid literal provided!"),
+                        };
+                        visitor.push_stack(l);
+                        Ok(())
+                    }
+                    UnaryOp::Rev => {
+                        let lit = _tk2lit!(v visitor);
+                        let l = match lit {
+                            Literal::Number(num) => Literal::Number(-num),
+                            Literal::Float(f) => Literal::Float(-f),
+                            _ => panic!("Invalid literal provided!"),
+                        };
+                        visitor.push_stack(l);
+                        Ok(())
+                    }
                 }
-                UnaryOp::Rev => {
-                    let lit = _tk2lit!(v visitor);
-                    let l = match lit {
-                        Literal::Number(num) => Literal::Number(-num),
-                        Literal::Float(f) => Literal::Float(-f),
-                        _ => panic!("Invalid literal provided!"),
-                    };
-                    visitor.push_stack(l);
-                    Ok(())
-                }
-            },
+            }
             Expression::StaticAccess(path) => {
                 if path.len() > 1 {
                     // specific scope
@@ -181,16 +183,16 @@ impl Visitable for Expression {
                     let lit = visitor.resolve_any_var(&element);
                     visitor.push_stack(lit);
                 }
-                return Ok(())
+                return Ok(());
             }
             Expression::InstanceAccess(_path) => {
                 // TODO
-                return Ok(())
+                return Ok(());
             }
             Expression::InvokeStatic(path, params) => {
                 let lit = visitor.call_static_fn(path.to_owned(), params.to_vec());
                 visitor.push_stack(lit);
-                return Ok(())
+                return Ok(());
             }
             Expression::InvokeInstance(path, params) => {
                 let old_params = params.clone();
@@ -208,7 +210,7 @@ impl Visitable for Expression {
                 };
                 let lit = visitor.call_inst_fn(path.to_owned(), str, old_params);
                 visitor.push_stack(lit);
-                return Ok(())
+                return Ok(());
             }
             Expression::InvokeBuiltin(name, params) => {
                 let lit = find_builtin(name.to_owned()).call((params
@@ -216,13 +218,14 @@ impl Visitable for Expression {
                     .map(|it| it.as_lit_advanced(visitor, "Expected a literal-like!"))
                     .collect::<Parameters>(),));
                 visitor.push_stack(lit);
-                return Ok(())
+                return Ok(());
             }
             Expression::IfStmt => _visit_if(visitor),
             Expression::WhileStmt => {
                 let mut condition = visitor.next_token()?;
 
-                if _tkbool!(condition.as_lit_advanced(visitor, "Could not process while condition!")) {
+                if _tkbool!(condition.as_lit_advanced(visitor, "Could not process while condition!"))
+                {
                     let _lbracket = visitor.next_token()?;
                     let mut chain = TokenChain::new();
                     while visitor.peek_token()? != Token::RBracket {
@@ -232,7 +235,9 @@ impl Visitable for Expression {
                     chain.reverse();
                     let _rbracket = visitor.next_token()?;
 
-                    while _tkbool!(condition.as_lit_advanced(visitor, "Could not process while condition!")) {
+                    while _tkbool!(
+                        condition.as_lit_advanced(visitor, "Could not process while condition!")
+                    ) {
                         for ele in &chain {
                             visitor.insert_token(ele.to_owned(), 0);
                         }
@@ -241,21 +246,24 @@ impl Visitable for Expression {
                 } else {
                     visitor.push_stack(Literal::Void);
                 }
-                return Ok(())
+                return Ok(());
             }
             _ => bail!("Unexpected unbounded {:?} token!", self),
         }
     }
 }
 
-fn _visit_if<V>(visitor: &mut V) -> anyhow::Result<()> where V: Visitor {
+fn _visit_if<V>(visitor: &mut V) -> anyhow::Result<()>
+where
+    V: Visitor,
+{
     let mut next = visitor.next_token()?;
     let next = next.as_lit_advanced(visitor, "Expected a literal-like statement!");
     let boolean = match next {
         Literal::Number(n) => n != 0,
         Literal::Bool(b) => b,
         Literal::Void => false,
-        _ => true
+        _ => true,
     };
     if boolean {
         let _lbracket = visitor.next_token()?;
@@ -273,8 +281,7 @@ fn _visit_if<V>(visitor: &mut V) -> anyhow::Result<()> where V: Visitor {
 
         visitor.process_until(len);
 
-
-        while let Ok(_)= &mut visitor.peek_token() {
+        while let Ok(_) = &mut visitor.peek_token() {
             let mut expr = visitor.peek_token()?;
             if let Token::Expression(box expr) = &mut expr {
                 match expr {
@@ -303,25 +310,26 @@ fn _visit_if<V>(visitor: &mut V) -> anyhow::Result<()> where V: Visitor {
             match expr {
                 box Expression::ElseStmt => {
                     _visit_else(visitor, matched)?;
-                    return Ok(())
-                },
+                    return Ok(());
+                }
                 box Expression::ElifStmt => {
                     let success = _visit_elif(visitor, matched);
                     matched = success.is_ok();
-                },
+                }
                 _ => {
                     visitor.push_stack(Literal::Void);
-                    return Ok(())
+                    return Ok(());
                 }
             }
         }
-
     }
-    return Ok(())
-
+    return Ok(());
 }
 
-fn _visit_else<V>(visitor: &mut V, matched: bool) -> anyhow::Result<()> where V: Visitor {
+fn _visit_else<V>(visitor: &mut V, matched: bool) -> anyhow::Result<()>
+where
+    V: Visitor,
+{
     // consuming current token
     let _ = visitor.next_token()?;
     let _lbracket = visitor.next_token()?;
@@ -333,7 +341,7 @@ fn _visit_else<V>(visitor: &mut V, matched: bool) -> anyhow::Result<()> where V:
         // `if` branch already matched before, so just dropping all of our stuff
         drop(chain);
         let _rbracket = visitor.next_token()?;
-        return Ok(())
+        return Ok(());
     }
 
     chain.reverse();
@@ -345,7 +353,10 @@ fn _visit_else<V>(visitor: &mut V, matched: bool) -> anyhow::Result<()> where V:
     Ok(())
 }
 
-fn _visit_elif<V>(visitor: &mut V, matched: bool) -> anyhow::Result<()> where V: Visitor {
+fn _visit_elif<V>(visitor: &mut V, matched: bool) -> anyhow::Result<()>
+where
+    V: Visitor,
+{
     // consuming current token
     let _ = visitor.next_token()?;
     let mut next = visitor.next_token()?;
@@ -379,5 +390,5 @@ fn _visit_elif<V>(visitor: &mut V, matched: bool) -> anyhow::Result<()> where V:
             let _rbracket = visitor.next_token()?;
             bail!("exit");
         }
-    }
+    };
 }

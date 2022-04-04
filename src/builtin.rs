@@ -1,8 +1,8 @@
-use std::io::Cursor;
 use crate::fns::Parameters;
 use crate::structs::Structure;
 use crate::tks::Literal;
 use crate::vm::Transmute;
+use std::io::Cursor;
 
 pub fn find_builtin(name: String) -> impl Fn(Parameters) -> Literal {
     match name.as_str() {
@@ -91,7 +91,7 @@ fn _transmute(params: Parameters) -> Literal {
             "bool" => Literal::Bool(bool::read(&mut cursor).unwrap()),
             "typename" => Literal::TypeName(String::read(&mut cursor).unwrap()),
             "void" => Literal::Void,
-            _ => Literal::Struct(Box::new(Structure::read(&mut cursor).unwrap()))
+            _ => Literal::Struct(Box::new(Structure::read(&mut cursor).unwrap())),
         }
     } else {
         panic!("Expected a typename to be transmuted!")

@@ -5,6 +5,63 @@ use crate::vm::Transmute;
 use std::fmt::{Display, Formatter};
 use std::io::Cursor;
 
+macro_rules! int_into_lit {
+    ($($i:ident),*) => {
+        $(
+            impl Into<Literal> for $i {
+                fn into(self) -> Literal {
+                    Literal::Number(self as i64)
+                }
+            }
+        )*
+    };
+}
+
+macro_rules! float_into_lit {
+    ($($i:ident),*) => {
+        $(
+            impl Into<Literal> for $i {
+                fn into(self) -> Literal {
+                    Literal::Float(self as f64)
+                }
+            }
+        )*
+    };
+}
+
+int_into_lit!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
+float_into_lit!(f32, f64);
+
+impl Into<Literal> for String {
+    fn into(self) -> Literal {
+        Literal::String(self)
+    }
+}
+
+impl<'a> Into<Literal> for &'a str {
+    fn into(self) -> Literal {
+        Literal::String(self.to_string())
+    }
+}
+
+impl Into<Literal> for char {
+    fn into(self) -> Literal {
+        Literal::Char(self)
+    }
+}
+
+impl Into<Literal> for bool {
+    fn into(self) -> Literal {
+        Literal::Bool(self)
+    }
+}
+
+impl Into<Literal> for Structure {
+    fn into(self) -> Literal {
+        Literal::Struct(Box::new(self))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     Number(i64),
@@ -110,16 +167,16 @@ impl Display for Literal {
 impl Literal {
     pub fn this_type(&self) -> String {
         match self {
-            Literal::Number(_) => "num",
-            Literal::Float(_) => "float",
-            Literal::String(_) => "str",
-            Literal::Char(_) => "char",
-            Literal::Ident(_) => "void",
-            Literal::Bool(_) => "bool",
-            Literal::TypeName(_) => "typename",
+            Literal::Number(_) => "num".to_string(),
+            Literal::Float(_) => "float".to_string(),
+            Literal::String(_) => "str".to_string(),
+            Literal::Char(_) => "char".to_string(),
+            Literal::Ident(_) => "void".to_string(),
+            Literal::Bool(_) => "bool".to_string(),
+            Literal::TypeName(_) => "typename".to_string(),
             Literal::Struct(str) => str.typename(),
-            Literal::Void => "void"
-        }.to_string()
+            Literal::Void => "void".to_string(),
+        }
     }
 
     pub fn type_str(&self, tn: &str) -> bool {
