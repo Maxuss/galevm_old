@@ -5,6 +5,7 @@ use crate::ToResult;
 use anyhow::bail;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
+use crate::features::StdFeature;
 use crate::fns::EXTERN_FNS;
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -23,6 +24,8 @@ pub trait TokenProvider {
 }
 
 pub trait ScopeProvider {
+    fn add_std_feature(&mut self, feature: StdFeature);
+
     fn resolve_var(&self, name: &str) -> anyhow::Result<Literal>;
     fn resolve_const(&self, name: &str) -> anyhow::Result<Literal>;
 
@@ -201,6 +204,10 @@ impl TokenProvider for Vm {
 }
 
 impl ScopeProvider for Vm {
+    fn add_std_feature(&mut self, feature: StdFeature) {
+        feature.include(self)
+    }
+
     fn resolve_var(&self, name: &str) -> anyhow::Result<Literal> {
         let value = self
             .scopes
@@ -338,9 +345,7 @@ impl ScopeProvider for Vm {
             .map(|it| it.as_lit_advanced(self, "Expected a literal-like!"))
             .collect();
         if name.contains("::") {
-            let split = name.split("::").collect::<Vec<&str>>();
-            let scope = split.get(0).unwrap().to_string();
-            let fnc_name = split.get(1).unwrap().to_string();
+            let (scope, fnc_name) = name.rsplit_once("::").unwrap();
             let fnc = self
                 .get_scope(scope.to_owned())
                 .lock()
@@ -369,9 +374,7 @@ impl ScopeProvider for Vm {
             .map(|it| it.as_lit_advanced(self, "Expected a literal-like!"))
             .collect();
         if name.contains("::") {
-            let split = name.split("::").collect::<Vec<&str>>();
-            let scope = split.get(0).unwrap().to_string();
-            let fnc_name = split.get(1).unwrap().to_string();
+            let (scope, fnc_name) = name.rsplit_once("::").unwrap();
             let fnc = self
                 .get_scope(scope.to_owned())
                 .lock()

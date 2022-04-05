@@ -1,3 +1,4 @@
+use std::cmp::max;
 use crate::structs::Structure;
 use crate::tks::{Literal, TokenChain};
 use crate::var::ContainingScope;
@@ -210,7 +211,7 @@ impl ExternFn {
                 self.param_names.len()
             );
         };
-        let fun = &EXTERN_FNS.lock().unwrap()[self.handler];
+        let fun = &EXTERN_FNS.lock().unwrap()[max(0, self.handler - 1)];
         fun.call((params, ))
     }
 }
@@ -248,13 +249,54 @@ macro_rules! extern_fns {
         )*
     }) => {
         {
-            use crate::visit::ScopeProvider;
             let mut __extfns = &mut $crate::fns::EXTERN_FNS.lock().unwrap();
+            #[allow(unused_imports)]
+            use $crate::visit::ScopeProvider;
             $(
                 __extfns.push(Box::new($name));
-                $vm.add_extern_fn(stringify!($name).to_string(), stringify!($out_ty).to_string(), vec![$(stringify!($param).to_string()),*], core::cmp::max(0, __extfns.len() - 1));
+                $vm.add_extern_fn(stringify!($name).to_string(), stringify!($out_ty).to_string(), vec![$(stringify!($param).to_string()),*], __extfns.len());
             )*
             drop(__extfns);
+        }
+    };
+
+    ($vm:ident {
+        $(
+            scope $scope:literal {
+                $(
+                    extern fn $name:ident ($($param:ident),* $(,)*) -> $out_ty:ident;
+                )*
+            }
+        )*
+    }) => {
+        {
+            let mut __extfns = &mut $crate::fns::EXTERN_FNS.lock().unwrap();
+            $(
+                let mut scope = $crate::var::ContainingScope::new();
+                $(
+                    __extfns.push(Box::new($name));
+                    scope.add_extern_fn(stringify!($name), stringify!($out_ty).to_string(), vec![$(stringify!($param).to_string()),*], __extfns.len());
+                )*
+                $vm.push_scope($scope.to_string(), scope);
+            )*
+            drop(__extfns);
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! unwrap_args {
+    ($params:ident => ($($lit:ident),* $(,)*)) => {
+        {
+            let mut vec = std::collections::VecDeque::from($params.to_owned());
+            (
+                    $(
+                    match vec.pop_back().unwrap() {
+                        $crate::tks::Literal::$lit(val) => val.to_owned(),
+                        _ => panic!("Expected {} literal!", stringify!($lit))
+                    }
+                ),*
+            )
         }
     };
 }

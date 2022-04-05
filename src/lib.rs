@@ -12,6 +12,8 @@ pub mod tks;
 pub mod var;
 pub mod visit;
 pub mod vm;
+pub mod stdlib;
+pub mod features;
 
 pub trait ToResult<T> {
     fn to_result(&self) -> anyhow::Result<T>;
@@ -35,9 +37,10 @@ where
 mod tests {
     use crate::structs::Structure;
     use crate::tks::{BinaryOp, Expression, Keyword, Literal, Token};
-    use crate::visit::{Visitor, Vm};
+    use crate::visit::{ScopeProvider, Visitor, Vm};
     use std::time::Instant;
     use crate::{extern_fns, Parameters};
+    use crate::features::StdFeature;
 
     #[test]
     fn test_exprs() {
@@ -238,16 +241,41 @@ mod tests {
             extern fn example_print(name) -> void;
             extern fn add(a, b) -> num;
         });
+
         let mut chain = vec![
             Token::Keyword(Keyword::Let),
             Token::Literal(Literal::Ident("sum".to_string())),
-            Token::Expression(Box::new(Expression::InvokeExtern("add".to_string(), vec![Token::Literal(Literal::Number(100)), Token::Literal(Literal::Number(250))]))),
-            Token::Expression(Box::new(Expression::InvokeExtern("example_print".to_string(), vec![Token::Literal(Literal::Ident("sum".to_string()))])))
+            Token::Expression(Box::new(
+                Expression::InvokeExtern(
+                    "add".to_string(),
+                    vec![Token::Literal(Literal::Number(100)), Token::Literal(Literal::Number(250))])
+            )),
+            Token::Expression(Box::new(
+                Expression::InvokeExtern(
+                    "example_print".to_string(),
+                    vec![Token::Literal(Literal::Ident("sum".to_string()))])
+            ))
         ];
         vm.load_chain(&mut chain);
         vm.process();
     }
 
+    #[test]
+    fn test_features() {
+        let mut vm = Vm::new();
+        vm.add_std_feature(StdFeature::IO);
+        vm.add_std_feature(StdFeature::Math);
+        vm.add_std_feature(StdFeature::Strings);
+
+        let mut chain = vec![
+            Token::Expression(Box::new(Expression::InvokeExtern(
+                "std::io::print".to_string(),
+                vec![Token::Expression(Box::new(Expression::InvokeExtern("std::str::stringify".to_string(), vec![Token::Expression(Box::new(Expression::InvokeExtern("std::math::sin".to_string(), vec![Token::Literal(Literal::Float(45f64))])))])))])
+            ))
+        ];
+        vm.load_chain(&mut chain);
+        vm.process();
+    }
     fn example_print(params: Parameters) -> Literal {
         println!("{}", params.get(0).unwrap());
         Literal::Void
