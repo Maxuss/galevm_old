@@ -5,6 +5,7 @@ use crate::ToResult;
 use anyhow::bail;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
+use crate::fns::EXTERN_FNS;
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Scope {
@@ -21,30 +22,15 @@ pub trait TokenProvider {
     fn insert_token(&mut self, tk: Token, at: usize);
 }
 
-pub trait Visitor: TokenProvider + Clone {
-    fn push_stack(&mut self, value: Literal);
-    fn pop_stack(&mut self) -> Literal;
+pub trait ScopeProvider {
     fn resolve_var(&self, name: &str) -> anyhow::Result<Literal>;
     fn resolve_const(&self, name: &str) -> anyhow::Result<Literal>;
-    fn push_scope_level(&mut self, scope: Scope);
-    fn pop_scope_level(&mut self) -> Scope;
-    fn scope_level(&mut self) -> Scope;
-    fn push_scope(&mut self, name: String, scope: ContainingScope);
-    fn visit<V>(&mut self, visitable: &mut V)
-    where
-        V: Visitable;
 
     fn import(&mut self, from: String, name: String);
     fn export(&mut self, name: String);
 
     fn add_var(&mut self, name: String, var: Literal);
     fn add_const(&mut self, name: String, var: Literal);
-
-    fn move_scope(&mut self, name: String);
-    fn scope_name(&self) -> String;
-    fn drop_scope(&mut self, name: String);
-
-    fn get_scope(&self, name: String) -> &Arc<Mutex<ContainingScope>>;
 
     fn add_inst_fn(
         &mut self,
@@ -60,16 +46,21 @@ pub trait Visitor: TokenProvider + Clone {
         param_names: Vec<String>,
         tks: TokenChain,
     );
+    fn add_extern_fn(
+        &mut self,
+        name: String,
+        output_ty: String,
+        param_names: Vec<String>,
+        ptr: usize
+    );
 
     fn register_type(&mut self, name: String, structure: Structure);
     fn resolve_type(&mut self, name: String) -> Structure;
 
     fn call_inst_fn(&mut self, name: String, this: Box<Structure>, params: TokenChain) -> Literal;
     fn call_static_fn(&mut self, name: String, params: TokenChain) -> Literal;
-
-    fn process(&mut self);
-
-    fn process_until(&mut self, until: usize);
+    fn call_extern_fn(&mut self, name: String, params: TokenChain) -> Literal;
+    fn call_ptr_fn(&mut self, ptr: usize, params: TokenChain) -> Literal;
 
     fn resolve_any_var(&self, name: &str) -> Literal {
         let var = self.resolve_var(name);
@@ -79,6 +70,34 @@ pub trait Visitor: TokenProvider + Clone {
             self.resolve_const(name).unwrap().to_owned()
         }
     }
+}
+
+pub trait GlobalScope {
+    fn push_scope_level(&mut self, scope: Scope);
+    fn pop_scope_level(&mut self) -> Scope;
+    fn scope_level(&mut self) -> Scope;
+    fn push_scope(&mut self, name: String, scope: ContainingScope);
+}
+
+pub trait LiteralStack {
+    fn push_stack(&mut self, value: Literal);
+    fn pop_stack(&mut self) -> Literal;
+
+    fn move_scope(&mut self, name: String);
+    fn scope_name(&self) -> String;
+    fn drop_scope(&mut self, name: String);
+
+    fn get_scope(&self, name: String) -> &Arc<Mutex<ContainingScope>>;
+}
+
+pub trait Visitor: TokenProvider + Clone + ScopeProvider + GlobalScope + LiteralStack {
+    fn visit<V>(&mut self, visitable: &mut V)
+    where
+        V: Visitable;
+
+    fn process(&mut self);
+
+    fn process_until(&mut self, until: usize);
 
     fn load_chain(&mut self, chain: &mut TokenChain) {
         let iter = chain.iter();
@@ -181,15 +200,7 @@ impl TokenProvider for Vm {
     }
 }
 
-impl Visitor for Vm {
-    fn push_stack(&mut self, value: Literal) {
-        self.lit_stack.push(value);
-    }
-
-    fn pop_stack(&mut self) -> Literal {
-        self.lit_stack.pop().unwrap()
-    }
-
+impl ScopeProvider for Vm {
     fn resolve_var(&self, name: &str) -> anyhow::Result<Literal> {
         let value = self
             .scopes
@@ -207,31 +218,6 @@ impl Visitor for Vm {
             .unwrap()
             .get_const(name)
             .to_result()
-    }
-
-    fn push_scope_level(&mut self, scope: Scope) {
-        self.scope_types.push(scope);
-    }
-
-    fn pop_scope_level(&mut self) -> Scope {
-        self.scope_types.pop().unwrap()
-    }
-
-    fn scope_level(&mut self) -> Scope {
-        *self.scope_types.last().unwrap()
-    }
-
-    fn push_scope(&mut self, name: String, scope: ContainingScope) {
-        self.scopes.insert(name, Arc::new(Mutex::new(scope)));
-    }
-
-    fn visit<V>(&mut self, visitable: &mut V)
-    where
-        V: Visitable,
-    {
-        visitable
-            .visit(self)
-            .expect("Found errors while visiting token!")
     }
 
     fn import(&mut self, from: String, name: String) {
@@ -252,6 +238,7 @@ impl Visitor for Vm {
             .export(&name);
     }
 
+
     fn add_var(&mut self, name: String, var: Literal) {
         self.scopes
             .get(&self.current_scope)
@@ -268,22 +255,6 @@ impl Visitor for Vm {
             .lock()
             .unwrap()
             .add_const(&name, var)
-    }
-
-    fn move_scope(&mut self, name: String) {
-        self.current_scope = name;
-    }
-
-    fn scope_name(&self) -> String {
-        self.current_scope.clone()
-    }
-
-    fn drop_scope(&mut self, name: String) {
-        drop(self.scopes.remove(&name));
-    }
-
-    fn get_scope(&self, name: String) -> &Arc<Mutex<ContainingScope>> {
-        self.scopes.get(&name).unwrap()
     }
 
     fn add_inst_fn(
@@ -314,6 +285,15 @@ impl Visitor for Vm {
             .lock()
             .unwrap()
             .add_static_fn(&name, output_ty, param_names, tks);
+    }
+
+    fn add_extern_fn(&mut self, name: String, output_ty: String, param_names: Vec<String>, ptr: usize) {
+        self.scopes
+            .get(&self.current_scope)
+            .unwrap()
+            .lock()
+            .unwrap()
+            .add_extern_fn(&name, output_ty, param_names, ptr);
     }
 
     fn register_type(&mut self, name: String, structure: Structure) {
@@ -360,12 +340,12 @@ impl Visitor for Vm {
         if name.contains("::") {
             let split = name.split("::").collect::<Vec<&str>>();
             let scope = split.get(0).unwrap().to_string();
-            let fnc = split.get(1).unwrap().to_string();
+            let fnc_name = split.get(1).unwrap().to_string();
             let fnc = self
                 .get_scope(scope.to_owned())
                 .lock()
                 .unwrap()
-                .get_static_fn(&fnc)
+                .get_static_fn(&fnc_name)
                 .unwrap();
             fnc.call(params, self)
         } else {
@@ -381,6 +361,112 @@ impl Visitor for Vm {
             fnc.call(params, self)
         }
     }
+
+    fn call_extern_fn(&mut self, name: String, params: TokenChain) -> Literal {
+        let mut params = params.clone();
+        let params = params
+            .iter_mut()
+            .map(|it| it.as_lit_advanced(self, "Expected a literal-like!"))
+            .collect();
+        if name.contains("::") {
+            let split = name.split("::").collect::<Vec<&str>>();
+            let scope = split.get(0).unwrap().to_string();
+            let fnc_name = split.get(1).unwrap().to_string();
+            let fnc = self
+                .get_scope(scope.to_owned())
+                .lock()
+                .unwrap()
+                .get_extern_fn(&fnc_name)
+                .unwrap();
+            fnc.call(params)
+        } else {
+            let fnc = self
+                .merged_scope()
+                .lock()
+                .unwrap()
+                .get_extern_fn(&name)
+                .expect(&format!(
+                    "Could not find function {} in current scope!",
+                    name
+                ));
+            fnc.call(params)
+        }
+    }
+
+    fn call_ptr_fn(&mut self, ptr: usize, params: TokenChain) -> Literal {
+        let fns = EXTERN_FNS.lock().unwrap();
+        if fns.len() < ptr {
+            panic!("Tried to call an unexistent ptr-bound external function: 0x{:2x}", ptr)
+        };
+        let mut params = params.clone();
+        let params = params
+            .iter_mut()
+            .map(|it| it.as_lit_advanced(self, "Expected a literal-like!"))
+            .collect();
+        let fnc = &fns[ptr];
+        fnc.call((params, ))
+    }
+}
+
+impl GlobalScope for Vm {
+    fn push_scope_level(&mut self, scope: Scope) {
+        self.scope_types.push(scope);
+    }
+
+    fn pop_scope_level(&mut self) -> Scope {
+        self.scope_types.pop().unwrap()
+    }
+
+    fn scope_level(&mut self) -> Scope {
+        *self.scope_types.last().unwrap()
+    }
+
+    fn push_scope(&mut self, name: String, scope: ContainingScope) {
+        self.scopes.insert(name, Arc::new(Mutex::new(scope)));
+    }
+
+}
+
+impl LiteralStack for Vm {
+    fn push_stack(&mut self, value: Literal) {
+        self.lit_stack.push(value);
+    }
+
+    fn pop_stack(&mut self) -> Literal {
+        self.lit_stack.pop().unwrap()
+    }
+
+
+    fn move_scope(&mut self, name: String) {
+        self.current_scope = name;
+    }
+
+    fn scope_name(&self) -> String {
+        self.current_scope.clone()
+    }
+
+    fn drop_scope(&mut self, name: String) {
+        drop(self.scopes.remove(&name));
+    }
+
+    fn get_scope(&self, name: String) -> &Arc<Mutex<ContainingScope>> {
+        self.scopes.get(&name).unwrap()
+    }
+
+}
+
+impl Visitor for Vm {
+
+
+    fn visit<V>(&mut self, visitable: &mut V)
+    where
+        V: Visitable,
+    {
+        visitable
+            .visit(self)
+            .expect("Found errors while visiting token!")
+    }
+
 
     fn process(&mut self) {
         while let Some(tk) = &mut self.tks.pop_back() {

@@ -4,8 +4,9 @@
 extern crate core;
 
 use anyhow::bail;
+use crate::fns::Parameters;
+use crate::tks::Literal;
 
-pub mod builtin;
 pub mod fns;
 pub mod structs;
 pub mod tks;
@@ -37,6 +38,7 @@ mod tests {
     use crate::tks::{BinaryOp, Expression, Keyword, Literal, Token};
     use crate::visit::{Visitor, Vm};
     use std::time::Instant;
+    use crate::extern_fns;
 
     #[test]
     fn test_exprs() {
@@ -76,7 +78,7 @@ mod tests {
         let mut str = Structure::with_type("Structure");
         str.add_var("cool_var".to_string(), Literal::Bool(true));
         str.add_const("cool_const".to_string(), Literal::Number(1200));
-        let mut chain = vec![Token::Expression(Box::new(Expression::InvokeBuiltin(
+        let mut chain = vec![Token::Expression(Box::new(Expression::InvokeExtern(
             "debugp".to_string(),
             vec![Token::Literal(Literal::Struct(Box::new(str)))],
         )))];
@@ -94,7 +96,7 @@ mod tests {
             Token::Literal(Literal::Ident("name".to_string())),
             Token::RParen,
             Token::LBracket,
-            Token::Expression(Box::new(Expression::InvokeBuiltin(
+            Token::Expression(Box::new(Expression::InvokeExtern(
                 "fmt".to_string(),
                 vec![
                     Token::Literal(Literal::String("Hello, ".to_string())),
@@ -103,7 +105,7 @@ mod tests {
             ))),
             Token::Literal(Literal::Ident("greeting".to_string())),
             Token::Keyword(Keyword::Let),
-            Token::Expression(Box::new(Expression::InvokeBuiltin(
+            Token::Expression(Box::new(Expression::InvokeExtern(
                 "println".to_string(),
                 vec![Token::Literal(Literal::Ident("greeting".to_string()))],
             ))),
@@ -129,7 +131,7 @@ mod tests {
             Token::Expression(Box::new(Expression::IfStmt)),
             Token::Literal(Literal::Bool(false)),
             Token::LBracket,
-            Token::Expression(Box::new(Expression::InvokeBuiltin(
+            Token::Expression(Box::new(Expression::InvokeExtern(
                 "println".to_string(),
                 vec![Token::Literal(Literal::String("If executed!".to_string()))],
             ))),
@@ -137,7 +139,7 @@ mod tests {
             Token::Expression(Box::new(Expression::ElifStmt)),
             Token::Literal(Literal::Bool(true)),
             Token::LBracket,
-            Token::Expression(Box::new(Expression::InvokeBuiltin(
+            Token::Expression(Box::new(Expression::InvokeExtern(
                 "println".to_string(),
                 vec![Token::Literal(Literal::String(
                     "Elif executed!".to_string(),
@@ -146,7 +148,7 @@ mod tests {
             Token::RBracket,
             Token::Expression(Box::new(Expression::ElseStmt)),
             Token::LBracket,
-            Token::Expression(Box::new(Expression::InvokeBuiltin(
+            Token::Expression(Box::new(Expression::InvokeExtern(
                 "println".to_string(),
                 vec![Token::Literal(Literal::String(
                     "Else executed!".to_string(),
@@ -184,7 +186,7 @@ mod tests {
                     Token::Literal(Literal::Number(1)),
                 ))),
             ))),
-            Token::Expression(Box::new(Expression::InvokeBuiltin(
+            Token::Expression(Box::new(Expression::InvokeExtern(
                 "debug".to_string(),
                 vec![Token::Literal(Literal::Ident("i".to_string()))],
             ))),
@@ -206,18 +208,18 @@ mod tests {
             Token::Literal(Literal::Number(120000)),
             Token::Keyword(Keyword::Let),
             Token::Literal(Literal::Ident("second".to_string())),
-            Token::Expression(Box::new(Expression::InvokeBuiltin(
+            Token::Expression(Box::new(Expression::InvokeExtern(
                 "transmute".to_string(),
                 vec![
                     Token::Literal(Literal::Ident("first".to_string())),
                     Token::Literal(Literal::TypeName("float".to_string())),
                 ],
             ))),
-            Token::Expression(Box::new(Expression::InvokeBuiltin(
+            Token::Expression(Box::new(Expression::InvokeExtern(
                 "debug".to_string(),
                 vec![Token::Literal(Literal::Ident("first".to_string()))],
             ))),
-            Token::Expression(Box::new(Expression::InvokeBuiltin(
+            Token::Expression(Box::new(Expression::InvokeExtern(
                 "debug".to_string(),
                 vec![Token::Literal(Literal::Ident("second".to_string()))],
             ))),
@@ -228,4 +230,23 @@ mod tests {
         let dur = Instant::now() - start;
         println!("Finished in {} mcs", dur.as_micros())
     }
+
+    #[test]
+    fn test_externs() {
+        use crate::example_extern;
+        let mut vm = Vm::new();
+        extern_fns!(vm {
+            extern fn example_extern(name) -> void;
+        });
+        let mut chain = vec![
+            Token::Expression(Box::new(Expression::InvokeExtern("example_extern".to_string(), vec![Token::Literal(Literal::String("World".to_string()))])))
+        ];
+        vm.load_chain(&mut chain);
+        vm.process();
+    }
+}
+
+fn example_extern(params: Parameters) -> Literal {
+    println!("Hello, {}!", params.get(0).unwrap());
+    Literal::Void
 }

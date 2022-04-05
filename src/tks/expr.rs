@@ -1,4 +1,3 @@
-use crate::builtin::find_builtin;
 use crate::fns::Parameters;
 use crate::tks::expr_handlers::_binary_op_handler;
 use crate::tks::{BinaryOp, Ident, Literal, Token, TokenChain, UnaryOp};
@@ -16,7 +15,7 @@ pub enum Expression {
     InstanceAccess(Vec<Ident>),
     InvokeStatic(Ident, TokenChain),
     InvokeInstance(Ident, TokenChain),
-    InvokeBuiltin(Ident, TokenChain),
+    InvokeExtern(Ident, TokenChain),
     IfStmt,
     ElseStmt,
     ElifStmt,
@@ -32,7 +31,7 @@ impl Transmute for Expression {
             Expression::InstanceAccess(i) => i.size(),
             Expression::InvokeStatic(i, p) => i.size() + p.size(),
             Expression::InvokeInstance(i, p) => i.size() + p.size(),
-            Expression::InvokeBuiltin(i, p) => i.size() + p.size(),
+            Expression::InvokeExtern(i, p) => i.size() + p.size(),
             _ => 0,
         }
     }
@@ -68,7 +67,7 @@ impl Transmute for Expression {
                 i.write(buf)?;
                 p.write(buf)?;
             }
-            Expression::InvokeBuiltin(i, p) => {
+            Expression::InvokeExtern(i, p) => {
                 0x05u8.write(buf)?;
                 i.write(buf)?;
                 p.write(buf)?;
@@ -93,7 +92,7 @@ impl Transmute for Expression {
             0x02 => Expression::InstanceAccess(Vec::read(buf)?),
             0x03 => Expression::InvokeStatic(Ident::read(buf)?, TokenChain::read(buf)?),
             0x04 => Expression::InvokeInstance(Ident::read(buf)?, TokenChain::read(buf)?),
-            0x05 => Expression::InvokeBuiltin(Ident::read(buf)?, TokenChain::read(buf)?),
+            0x05 => Expression::InvokeExtern(Ident::read(buf)?, TokenChain::read(buf)?),
             0x06 => Expression::IfStmt,
             0x07 => Expression::ElseStmt,
             0x08 => Expression::WhileStmt,
@@ -212,11 +211,8 @@ impl Visitable for Expression {
                 visitor.push_stack(lit);
                 return Ok(());
             }
-            Expression::InvokeBuiltin(name, params) => {
-                let lit = find_builtin(name.to_owned()).call((params
-                    .iter_mut()
-                    .map(|it| it.as_lit_advanced(visitor, "Expected a literal-like!"))
-                    .collect::<Parameters>(),));
+            Expression::InvokeExtern(name, params) => {
+                let lit = visitor.call_extern_fn(name.to_owned(), params.to_owned());
                 visitor.push_stack(lit);
                 return Ok(());
             }

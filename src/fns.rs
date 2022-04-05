@@ -6,8 +6,15 @@ use crate::vm::Transmute;
 use rand::RngCore;
 use std::fmt::Debug;
 use std::io::Cursor;
+use std::sync::Mutex;
+use lazy_static::lazy_static;
 
 pub type Parameters = Vec<Literal>;
+pub type DynExecutable = dyn Fn(Parameters) -> Literal + Sync + Send;
+
+lazy_static! {
+    pub static ref EXTERN_FNS: Mutex<Vec<Box<DynExecutable>>> = Mutex::new(Vec::new());
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InstFn {
@@ -177,4 +184,76 @@ impl StaticFn {
 
         output
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExternFn {
+    out_ty: String,
+    param_names: Vec<String>,
+    handler: usize
+}
+
+impl ExternFn {
+    pub fn new(out_ty: String, param_names: Vec<String>, handler: usize) -> Self {
+        Self {
+            out_ty,
+            param_names,
+            handler
+        }
+    }
+
+    pub fn call(&self, params: Parameters) -> Literal
+    {
+        if params.len() != self.param_names.len() {
+            panic!(
+                "Invalid amount of arguments supplied! Expected {} arg(s)!",
+                self.param_names.len()
+            );
+        };
+
+        let fun = &EXTERN_FNS.lock().unwrap()[0];
+        fun.call((params, ))
+    }
+}
+
+impl Transmute for ExternFn {
+    fn size(&mut self) -> usize {
+        self.out_ty.size() + self.param_names.size() + (self.handler as u64).size()
+    }
+
+    fn write(&mut self, buf: &mut Vec<u8>) -> anyhow::Result<()> {
+        self.out_ty.write(buf)?;
+        self.param_names.write(buf)?;
+        (self.handler as u64).write(buf)?;
+        Ok(())
+    }
+
+    fn read(buf: &mut Cursor<Vec<u8>>) -> anyhow::Result<Self> where Self: Sized {
+        let out_ty = String::read(buf)?;
+        let param_names = Vec::<String>::read(buf)?;
+        let handler = u64::read(buf)?;
+        Ok(Self {
+            out_ty,
+            param_names,
+            handler: handler as usize
+        })
+    }
+}
+
+#[macro_export]
+macro_rules! extern_fns {
+    ($vm:ident {
+        $(
+            extern fn $name:ident ($($param:ident),* $(,)*) -> $out_ty:ident;
+        )*
+    }) => {
+        {
+            use crate::visit::ScopeProvider;
+            let mut __extfns = $crate::fns::EXTERN_FNS.lock().unwrap();
+            $(
+                __extfns.push(Box::new($name));
+                $vm.add_extern_fn(stringify!($name).to_string(), stringify!($out_ty).to_string(), vec![$(stringify!($param).to_string()),*], __extfns.len());
+            )*
+        }
+    };
 }
