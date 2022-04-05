@@ -210,8 +210,7 @@ impl ExternFn {
                 self.param_names.len()
             );
         };
-
-        let fun = &EXTERN_FNS.lock().unwrap()[0];
+        let fun = &EXTERN_FNS.lock().unwrap()[self.handler];
         fun.call((params, ))
     }
 }
@@ -237,6 +236,7 @@ impl Transmute for ExternFn {
             param_names,
             handler: handler as usize
         })
+
     }
 }
 
@@ -249,11 +249,12 @@ macro_rules! extern_fns {
     }) => {
         {
             use crate::visit::ScopeProvider;
-            let mut __extfns = $crate::fns::EXTERN_FNS.lock().unwrap();
+            let mut __extfns = &mut $crate::fns::EXTERN_FNS.lock().unwrap();
             $(
                 __extfns.push(Box::new($name));
-                $vm.add_extern_fn(stringify!($name).to_string(), stringify!($out_ty).to_string(), vec![$(stringify!($param).to_string()),*], __extfns.len());
+                $vm.add_extern_fn(stringify!($name).to_string(), stringify!($out_ty).to_string(), vec![$(stringify!($param).to_string()),*], core::cmp::max(0, __extfns.len() - 1));
             )*
+            drop(__extfns);
         }
     };
 }

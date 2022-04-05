@@ -5,7 +5,6 @@ extern crate core;
 
 use anyhow::bail;
 use crate::fns::Parameters;
-use crate::tks::Literal;
 
 pub mod fns;
 pub mod structs;
@@ -38,7 +37,7 @@ mod tests {
     use crate::tks::{BinaryOp, Expression, Keyword, Literal, Token};
     use crate::visit::{Visitor, Vm};
     use std::time::Instant;
-    use crate::extern_fns;
+    use crate::{extern_fns, Parameters};
 
     #[test]
     fn test_exprs() {
@@ -233,20 +232,34 @@ mod tests {
 
     #[test]
     fn test_externs() {
-        use crate::example_extern;
         let mut vm = Vm::new();
+
         extern_fns!(vm {
-            extern fn example_extern(name) -> void;
+            extern fn example_print(name) -> void;
+            extern fn add(a, b) -> num;
         });
         let mut chain = vec![
-            Token::Expression(Box::new(Expression::InvokeExtern("example_extern".to_string(), vec![Token::Literal(Literal::String("World".to_string()))])))
+            Token::Keyword(Keyword::Let),
+            Token::Literal(Literal::Ident("sum".to_string())),
+            Token::Expression(Box::new(Expression::InvokeExtern("add".to_string(), vec![Token::Literal(Literal::Number(100)), Token::Literal(Literal::Number(250))]))),
+            Token::Expression(Box::new(Expression::InvokeExtern("example_print".to_string(), vec![Token::Literal(Literal::Ident("sum".to_string()))])))
         ];
         vm.load_chain(&mut chain);
         vm.process();
     }
+
+    fn example_print(params: Parameters) -> Literal {
+        println!("{}", params.get(0).unwrap());
+        Literal::Void
+    }
+
+    fn add(params: Parameters) -> Literal {
+        if let Literal::Number(a) = *params.get(0).unwrap() {
+            if let Literal::Number(b) = *params.get(1).unwrap() {
+                return Literal::Number(a + b)
+            }
+        }
+        Literal::Void
+    }
 }
 
-fn example_extern(params: Parameters) -> Literal {
-    println!("Hello, {}!", params.get(0).unwrap());
-    Literal::Void
-}
