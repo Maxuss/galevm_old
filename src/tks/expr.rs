@@ -15,7 +15,6 @@ pub enum Expression {
     InstanceAccess(Vec<Ident>),
     InvokeStatic(Ident, TokenChain),
     InvokeInstance(Ident, TokenChain),
-    InvokeExtern(Ident, TokenChain),
     IfStmt,
     ElseStmt,
     ElifStmt,
@@ -31,7 +30,6 @@ impl Transmute for Expression {
             Expression::InstanceAccess(i) => i.size(),
             Expression::InvokeStatic(i, p) => i.size() + p.size(),
             Expression::InvokeInstance(i, p) => i.size() + p.size(),
-            Expression::InvokeExtern(i, p) => i.size() + p.size(),
             _ => 0,
         }
     }
@@ -67,15 +65,10 @@ impl Transmute for Expression {
                 i.write(buf)?;
                 p.write(buf)?;
             }
-            Expression::InvokeExtern(i, p) => {
-                0x05u8.write(buf)?;
-                i.write(buf)?;
-                p.write(buf)?;
-            }
-            Expression::IfStmt => 0x06u8.write(buf)?,
-            Expression::ElseStmt => 0x07u8.write(buf)?,
-            Expression::WhileStmt => 0x08u8.write(buf)?,
-            Expression::ElifStmt => 0x09u8.write(buf)?,
+            Expression::IfStmt => 0x05u8.write(buf)?,
+            Expression::ElseStmt => 0x06u8.write(buf)?,
+            Expression::WhileStmt => 0x07u8.write(buf)?,
+            Expression::ElifStmt => 0x08u8.write(buf)?,
         };
         Ok(())
     }
@@ -92,11 +85,10 @@ impl Transmute for Expression {
             0x02 => Expression::InstanceAccess(Vec::read(buf)?),
             0x03 => Expression::InvokeStatic(Ident::read(buf)?, TokenChain::read(buf)?),
             0x04 => Expression::InvokeInstance(Ident::read(buf)?, TokenChain::read(buf)?),
-            0x05 => Expression::InvokeExtern(Ident::read(buf)?, TokenChain::read(buf)?),
-            0x06 => Expression::IfStmt,
-            0x07 => Expression::ElseStmt,
-            0x08 => Expression::WhileStmt,
-            0x09 => Expression::ElifStmt,
+            0x05 => Expression::IfStmt,
+            0x06 => Expression::ElseStmt,
+            0x07 => Expression::WhileStmt,
+            0x08 => Expression::ElifStmt,
             _ => bail!("Invalid expression provided!"),
         })
     }
@@ -208,11 +200,6 @@ impl Visitable for Expression {
                     ),
                 };
                 let lit = visitor.call_inst_fn(path.to_owned(), str, old_params);
-                visitor.push_stack(lit);
-                return Ok(());
-            }
-            Expression::InvokeExtern(name, params) => {
-                let lit = visitor.call_extern_fn(name.to_owned(), params.to_owned());
                 visitor.push_stack(lit);
                 return Ok(());
             }

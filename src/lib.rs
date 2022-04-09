@@ -80,7 +80,7 @@ mod tests {
         let mut str = Structure::with_type("Structure");
         str.add_var("cool_var".to_string(), Literal::Bool(true));
         str.add_const("cool_const".to_string(), Literal::Number(1200));
-        let mut chain = vec![Token::Expression(Box::new(Expression::InvokeExtern(
+        let mut chain = vec![Token::Expression(Box::new(Expression::InvokeStatic(
             "debugp".to_string(),
             vec![Token::Literal(Literal::Struct(Box::new(str)))],
         )))];
@@ -98,7 +98,7 @@ mod tests {
             Token::Literal(Literal::Ident("name".to_string())),
             Token::RParen,
             Token::LBracket,
-            Token::Expression(Box::new(Expression::InvokeExtern(
+            Token::Expression(Box::new(Expression::InvokeStatic(
                 "fmt".to_string(),
                 vec![
                     Token::Literal(Literal::String("Hello, ".to_string())),
@@ -107,7 +107,7 @@ mod tests {
             ))),
             Token::Literal(Literal::Ident("greeting".to_string())),
             Token::Keyword(Keyword::Let),
-            Token::Expression(Box::new(Expression::InvokeExtern(
+            Token::Expression(Box::new(Expression::InvokeStatic(
                 "println".to_string(),
                 vec![Token::Literal(Literal::Ident("greeting".to_string()))],
             ))),
@@ -133,7 +133,7 @@ mod tests {
             Token::Expression(Box::new(Expression::IfStmt)),
             Token::Literal(Literal::Bool(false)),
             Token::LBracket,
-            Token::Expression(Box::new(Expression::InvokeExtern(
+            Token::Expression(Box::new(Expression::InvokeStatic(
                 "println".to_string(),
                 vec![Token::Literal(Literal::String("If executed!".to_string()))],
             ))),
@@ -141,7 +141,7 @@ mod tests {
             Token::Expression(Box::new(Expression::ElifStmt)),
             Token::Literal(Literal::Bool(true)),
             Token::LBracket,
-            Token::Expression(Box::new(Expression::InvokeExtern(
+            Token::Expression(Box::new(Expression::InvokeStatic(
                 "println".to_string(),
                 vec![Token::Literal(Literal::String(
                     "Elif executed!".to_string(),
@@ -150,7 +150,7 @@ mod tests {
             Token::RBracket,
             Token::Expression(Box::new(Expression::ElseStmt)),
             Token::LBracket,
-            Token::Expression(Box::new(Expression::InvokeExtern(
+            Token::Expression(Box::new(Expression::InvokeStatic(
                 "println".to_string(),
                 vec![Token::Literal(Literal::String(
                     "Else executed!".to_string(),
@@ -168,6 +168,8 @@ mod tests {
     #[test]
     fn test_while() {
         let mut vm = Vm::new();
+        vm.add_std_feature(StdFeature::IO);
+
         let mut chain = vec![
             Token::Keyword(Keyword::Let),
             Token::Literal(Literal::Ident("i".to_string())),
@@ -188,8 +190,8 @@ mod tests {
                     Token::Literal(Literal::Number(1)),
                 ))),
             ))),
-            Token::Expression(Box::new(Expression::InvokeExtern(
-                "debug".to_string(),
+            Token::Expression(Box::new(Expression::InvokeStatic(
+                "std::io::debug".to_string(),
                 vec![Token::Literal(Literal::Ident("i".to_string()))],
             ))),
             Token::RBracket,
@@ -204,25 +206,27 @@ mod tests {
     #[test]
     fn test_transmute() {
         let mut vm = Vm::new();
+        vm.add_std_feature(StdFeature::Memory);
+        vm.add_std_feature(StdFeature::IO);
         let mut chain = vec![
             Token::Keyword(Keyword::Let),
             Token::Literal(Literal::Ident("first".to_string())),
             Token::Literal(Literal::Number(120000)),
             Token::Keyword(Keyword::Let),
             Token::Literal(Literal::Ident("second".to_string())),
-            Token::Expression(Box::new(Expression::InvokeExtern(
-                "transmute".to_string(),
+            Token::Expression(Box::new(Expression::InvokeStatic(
+                "std::mem::transmute".to_string(),
                 vec![
                     Token::Literal(Literal::Ident("first".to_string())),
-                    Token::Literal(Literal::TypeName("float".to_string())),
+                    Token::Literal(Literal::TypeName("void".to_string())),
                 ],
             ))),
-            Token::Expression(Box::new(Expression::InvokeExtern(
-                "debug".to_string(),
+            Token::Expression(Box::new(Expression::InvokeStatic(
+                "std::io::debug".to_string(),
                 vec![Token::Literal(Literal::Ident("first".to_string()))],
             ))),
-            Token::Expression(Box::new(Expression::InvokeExtern(
-                "debug".to_string(),
+            Token::Expression(Box::new(Expression::InvokeStatic(
+                "std::io::debug".to_string(),
                 vec![Token::Literal(Literal::Ident("second".to_string()))],
             ))),
         ];
@@ -246,12 +250,12 @@ mod tests {
             Token::Keyword(Keyword::Let),
             Token::Literal(Literal::Ident("sum".to_string())),
             Token::Expression(Box::new(
-                Expression::InvokeExtern(
+                Expression::InvokeStatic(
                     "add".to_string(),
                     vec![Token::Literal(Literal::Number(100)), Token::Literal(Literal::Number(250))])
             )),
             Token::Expression(Box::new(
-                Expression::InvokeExtern(
+                Expression::InvokeStatic(
                     "example_print".to_string(),
                     vec![Token::Literal(Literal::Ident("sum".to_string()))])
             ))
@@ -270,9 +274,9 @@ mod tests {
         let mut chain = vec![
             Token::Keyword(Keyword::Import),
             Token::Literal(Literal::Ident("std::io::print".to_string())),
-            Token::Expression(Box::new(Expression::InvokeExtern(
+            Token::Expression(Box::new(Expression::InvokeStatic(
                 "print".to_string(),
-                vec![Token::Expression(Box::new(Expression::InvokeExtern("std::str::stringify".to_string(), vec![Token::Expression(Box::new(Expression::InvokeExtern("std::math::sin".to_string(), vec![Token::Literal(Literal::Float(45f64))])))])))])
+                vec![Token::Expression(Box::new(Expression::InvokeStatic("std::str::stringify".to_string(), vec![Token::Expression(Box::new(Expression::InvokeStatic("std::math::sin".to_string(), vec![Token::Literal(Literal::Float(45f64))])))])))])
             ))
         ];
         vm.load_chain(&mut chain);

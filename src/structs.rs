@@ -104,6 +104,6 @@ impl Structure {
             "Could not find function {} in current scope!",
             name
         ));
-        fnc.call(params, visitor)
+        fnc.call(params, Some(visitor))
     }
 }

@@ -8,6 +8,7 @@ use rand::RngCore;
 use std::fmt::Debug;
 use std::io::Cursor;
 use std::sync::Mutex;
+use anyhow::bail;
 use lazy_static::lazy_static;
 
 pub type Parameters = Vec<Literal>;
@@ -15,6 +16,51 @@ pub type DynExecutable = dyn Fn(Parameters) -> Literal + Sync + Send;
 
 lazy_static! {
     pub static ref EXTERN_FNS: Mutex<Vec<Box<DynExecutable>>> = Mutex::new(Vec::new());
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum StaticFnType {
+    Standard(StaticFn),
+    Extern(ExternFn)
+}
+
+impl StaticFnType {
+    pub fn call<V>  (&self, params: Parameters, visitor: Option<&mut V>) -> Literal where V: Visitor {
+        match self {
+            StaticFnType::Standard(std) => std.call(params, visitor.unwrap()),
+            StaticFnType::Extern(ext) => ext.call(params)
+        }
+    }
+}
+
+impl Transmute for StaticFnType {
+    fn size(&mut self) -> usize {
+        1 + match self {
+            StaticFnType::Standard(std) => std.size(),
+            StaticFnType::Extern(ext) => ext.size()
+        }
+    }
+
+    fn write(&mut self, buf: &mut Vec<u8>) -> anyhow::Result<()> {
+        match self {
+            StaticFnType::Standard(std) => {
+                0x01u8.write(buf)?;
+                std.write(buf)
+            }
+            StaticFnType::Extern(ext) => {
+                0x01u8.write(buf)?;
+                ext.write(buf)
+            }
+        }
+    }
+
+    fn read(buf: &mut Cursor<Vec<u8>>) -> anyhow::Result<Self> where Self: Sized {
+        match u8::read(buf)? {
+            0x01 => Ok(StaticFnType::Standard(StaticFn::read(buf)?)),
+            0x02 => Ok(StaticFnType::Extern(ExternFn::read(buf)?)),
+            _ => bail!("Invalid static fn id provided!")
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -117,7 +163,7 @@ impl InstFn {
         // processing tokens
         visitor.load_chain(&mut self.chain.clone());
         let output = visitor.pop_stack();
-        if !output.type_str(&self.out_ty) {
+        if self.out_ty != "unknown" && !output.type_str(&self.out_ty) {
             panic!(
                 "Invalid output provided! Expected output of type {:?}",
                 self.out_ty
@@ -171,7 +217,7 @@ impl StaticFn {
         visitor.load_chain(&mut self.chain.clone());
         visitor.process();
         let output = visitor.pop_stack();
-        if !output.type_str(&self.out_ty) {
+        if self.out_ty != "unknown" && !output.type_str(&self.out_ty) {
             panic!(
                 "Invalid output provided! Expected output of type {:?}",
                 self.out_ty

@@ -1,4 +1,4 @@
-use crate::fns::{ExternFn, InstFn, StaticFn};
+use crate::fns::{ExternFn, InstFn, StaticFn, StaticFnType};
 use crate::structs::Structure;
 use crate::tks::{Literal, TokenChain};
 use crate::vm::Transmute;
@@ -64,7 +64,7 @@ where
 pub struct ContainingScope {
     mutables: HashMap<String, Literal>,
     consts: HashMap<String, Literal>,
-    static_fns: HashMap<String, Box<StaticFn>>,
+    static_fns: HashMap<String, Box<StaticFnType>>,
     inst_fns: HashMap<String, Box<InstFn>>,
     exports: Vec<String>,
     extern_fns: HashMap<String, Box<ExternFn>>,
@@ -181,7 +181,7 @@ impl ContainingScope {
     ) {
         self.static_fns.insert(
             name.to_string(),
-            Box::new(StaticFn::new(output_ty, param_names, tks)),
+            Box::new(StaticFnType::Standard(StaticFn::new(output_ty, param_names, tks))),
         );
     }
 
@@ -205,12 +205,12 @@ impl ContainingScope {
         param_names: Vec<String>,
         handler_ptr: usize
     ) {
-        self.extern_fns.insert(name.to_string(),
-         Box::new(ExternFn::new(output_ty, param_names, handler_ptr)));
+        self.static_fns.insert(name.to_string(),
+         Box::new(StaticFnType::Extern(ExternFn::new(output_ty, param_names, handler_ptr))));
     }
 
     pub fn add_prebuilt_static_fn(&mut self, name: &str, sf: StaticFn) {
-        self.static_fns.insert(name.to_string(), Box::new(sf));
+        self.static_fns.insert(name.to_string(), Box::new(StaticFnType::Standard(sf)));
     }
 
     pub fn add_prebuilt_inst_fn(&mut self, name: &str, inf: InstFn) {
@@ -218,7 +218,7 @@ impl ContainingScope {
     }
 
     pub fn add_prebuilt_extern_fn(&mut self, name: &str, ef: ExternFn) {
-        self.extern_fns.insert(name.to_string(), Box::new(ef));
+        self.static_fns.insert(name.to_string(), Box::new(StaticFnType::Extern(ef)));
     }
 
     pub fn add_struct(&mut self, name: &str, typ: Structure) {
@@ -229,16 +229,12 @@ impl ContainingScope {
         self.structs.get(typename).map(|s| (**s).clone())
     }
 
-    pub fn get_static_fn(&mut self, name: &str) -> Option<StaticFn> {
+    pub fn get_static_fn(&mut self, name: &str) -> Option<StaticFnType> {
         self.static_fns.get(name).map(|f| *f.clone())
     }
 
     pub fn get_inst_fn(&mut self, name: &str) -> Option<InstFn> {
         self.inst_fns.get(name).map(|f| *f.clone())
-    }
-
-    pub fn get_extern_fn(&mut self, name: &str) -> Option<ExternFn> {
-        self.extern_fns.get(name).map(|f| *f.clone())
     }
 
     pub fn get_any_value(&mut self, name: &str) -> Option<ScopedValue> {
@@ -262,10 +258,6 @@ impl ContainingScope {
         if inf.is_some() {
             return Some(ScopedValue::InstFn(inf?));
         }
-        let ef = self.get_extern_fn(name);
-        if ef.is_some() {
-            return Some(ScopedValue::ExternFn(ef?))
-        }
         return None;
     }
 
@@ -279,7 +271,6 @@ pub enum ScopedValue {
     Constant(Literal),
     Mutable(Literal),
     Type(Structure),
-    StaticFn(StaticFn),
+    StaticFn(StaticFnType),
     InstFn(InstFn),
-    ExternFn(ExternFn)
 }

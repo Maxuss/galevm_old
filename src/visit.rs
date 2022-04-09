@@ -6,7 +6,7 @@ use anyhow::bail;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use crate::features::StdFeature;
-use crate::fns::EXTERN_FNS;
+use crate::fns::{EXTERN_FNS, StaticFnType};
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Scope {
@@ -62,7 +62,6 @@ pub trait ScopeProvider {
 
     fn call_inst_fn(&mut self, name: String, this: Box<Structure>, params: TokenChain) -> Literal;
     fn call_static_fn(&mut self, name: String, params: TokenChain) -> Literal;
-    fn call_extern_fn(&mut self, name: String, params: TokenChain) -> Literal;
     fn call_ptr_fn(&mut self, ptr: usize, params: TokenChain) -> Literal;
 
     fn resolve_any_var(&self, name: &str) -> Literal {
@@ -166,13 +165,13 @@ impl Vm {
                         ScopedValue::Mutable(v) => current.lock().unwrap().add_var(&name, v),
                         ScopedValue::Type(v) => current.lock().unwrap().add_struct(&name, v),
                         ScopedValue::StaticFn(v) => {
-                            current.lock().unwrap().add_prebuilt_static_fn(&name, v)
+                            match v {
+                                StaticFnType::Standard(std) => current.lock().unwrap().add_prebuilt_static_fn(&name, std),
+                                StaticFnType::Extern(ext) => current.lock().unwrap().add_prebuilt_extern_fn(&name, ext)
+                            }
                         }
                         ScopedValue::InstFn(v) => {
                             current.lock().unwrap().add_prebuilt_inst_fn(&name, v)
-                        }
-                        ScopedValue::ExternFn(v) => {
-                            current.lock().unwrap().add_prebuilt_extern_fn(&name, v)
                         }
                     },
                 }
@@ -356,7 +355,7 @@ impl ScopeProvider for Vm {
                 .unwrap()
                 .get_static_fn(&fnc_name)
                 .unwrap();
-            fnc.call(params, self)
+            fnc.call(params, Some(self))
         } else {
             let fnc = self
                 .merged_scope()
@@ -367,36 +366,7 @@ impl ScopeProvider for Vm {
                     "Could not find function {} in current scope!",
                     name
                 ));
-            fnc.call(params, self)
-        }
-    }
-
-    fn call_extern_fn(&mut self, name: String, params: TokenChain) -> Literal {
-        let mut params = params.clone();
-        let params = params
-            .iter_mut()
-            .map(|it| it.as_lit_advanced(self, "Expected a literal-like!"))
-            .collect();
-        if name.contains("::") {
-            let (scope, fnc_name) = name.rsplit_once("::").unwrap();
-            let fnc = self
-                .get_scope(scope.to_owned())
-                .lock()
-                .unwrap()
-                .get_extern_fn(&fnc_name)
-                .unwrap();
-            fnc.call(params)
-        } else {
-            let fnc = self
-                .merged_scope()
-                .lock()
-                .unwrap()
-                .get_extern_fn(&name)
-                .expect(&format!(
-                    "Could not find function {} in current scope!",
-                    name
-                ));
-            fnc.call(params)
+            fnc.call(params, Some(self))
         }
     }
 
