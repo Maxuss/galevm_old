@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use crate::{extern_fns, Parameters, unwrap_args};
 use crate::tks::Literal;
 use crate::visit::Visitor;
@@ -15,13 +16,15 @@ fn println(params: Parameters) -> Literal {
 }
 
 fn fmt(params: Parameters) -> Literal {
-    let mut params = params.clone();
-    let mut pattern = unwrap_args!(params => (String));
-    params.pop();
+    let mut params = VecDeque::from(params);
+    let mut pattern = match params.pop_front().unwrap() {
+        Literal::String(str) => str,
+        _ => panic!("Expected string literal!")
+    };
     for v in params {
         pattern = pattern.replacen("{}", &v.to_string(), 1);
     };
-    Literal::String(pattern)
+    Literal::String(pattern.to_string())
 }
 
 fn debug(params: Parameters) -> Literal {
@@ -62,7 +65,7 @@ pub fn __io_feature<V>(visitor: &mut V) where V: Visitor {
         scope "std::io" {
             extern fn print(value) -> void;
             extern fn println(value) -> void;
-            extern fn fmt(value) -> str;
+            extern fn fmt(pattern, varargs) -> str;
             extern fn debug(value) -> void;
             extern fn debugp(value) -> void;
         }

@@ -8,6 +8,7 @@ pub mod io;
 pub mod math;
 pub mod strs;
 pub mod mem;
+pub mod prelude;
 
 fn panic(params: Parameters) -> Literal {
     let msg = unwrap_args!(params => (String));

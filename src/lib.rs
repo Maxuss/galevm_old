@@ -90,6 +90,7 @@ mod tests {
     #[test]
     fn test_functions() {
         let mut vm = Vm::new();
+        vm.add_std_feature(StdFeature::IO);
         let mut chain = vec![
             Token::Keyword(Keyword::Function),
             Token::Literal(Literal::TypeName("void".to_string())),
@@ -98,24 +99,24 @@ mod tests {
             Token::Literal(Literal::Ident("name".to_string())),
             Token::RParen,
             Token::LBracket,
+            Token::Keyword(Keyword::Let),
+            Token::Literal(Literal::Ident("greeting".to_string())),
             Token::Expression(Box::new(Expression::InvokeStatic(
-                "fmt".to_string(),
+                "std::io::fmt".to_string(),
                 vec![
-                    Token::Literal(Literal::String("Hello, ".to_string())),
+                    Token::Literal(Literal::String("Hello, {}".to_string())),
                     Token::Literal(Literal::Ident("name".to_string())),
                 ],
             ))),
-            Token::Literal(Literal::Ident("greeting".to_string())),
-            Token::Keyword(Keyword::Let),
             Token::Expression(Box::new(Expression::InvokeStatic(
-                "println".to_string(),
+                "std::io::println".to_string(),
                 vec![Token::Literal(Literal::Ident("greeting".to_string()))],
             ))),
             Token::Keyword(Keyword::Return),
             Token::Literal(Literal::Void),
             Token::RBracket,
             Token::Expression(Box::new(Expression::InvokeStatic(
-                "global::say_hello".to_string(),
+                "say_hello".to_string(),
                 vec![Token::Literal(Literal::String("World!".to_string()))],
             ))),
         ];
@@ -129,6 +130,7 @@ mod tests {
     #[test]
     fn test_if_else_elif() {
         let mut vm = Vm::new();
+        vm.add_std_feature(StdFeature::Prelude);
         let mut chain = vec![
             Token::Expression(Box::new(Expression::IfStmt)),
             Token::Literal(Literal::Bool(false)),
@@ -282,6 +284,20 @@ mod tests {
         vm.load_chain(&mut chain);
         vm.process();
     }
+
+    #[test]
+    fn test_sleep() {
+        let mut vm = Vm::new();
+        vm.add_std_feature(StdFeature::Prelude);
+        let mut chain = vec![
+            Token::Expression(Box::new(Expression::InvokeStatic("println".to_string(), vec![Token::Literal(Literal::String("Hello!".to_string()))]))),
+            Token::Expression(Box::new(Expression::InvokeStatic("sleep".to_string(), vec![Token::Literal(Literal::Number(5))]))),
+            Token::Expression(Box::new(Expression::InvokeStatic("println".to_string(), vec![Token::Literal(Literal::String("Hello again!".to_string()))])))
+        ];
+        vm.load_chain(&mut chain);
+        vm.process();
+    }
+
     fn example_print(params: Parameters) -> Literal {
         println!("{}", params.get(0).unwrap());
         Literal::Void

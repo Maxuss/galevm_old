@@ -138,7 +138,7 @@ impl InstFn {
     where
         V: Visitor,
     {
-        if params.len() != self.param_names.len() {
+        if !self.param_names.contains(&"varargs".to_string()) && params.len() != self.param_names.len() {
             panic!(
                 "Invalid amount of arguments supplied! Expected {} args!",
                 self.param_names.len()
@@ -192,7 +192,7 @@ impl StaticFn {
     where
         V: Visitor,
     {
-        if params.len() != self.param_names.len() {
+        if !self.param_names.contains(&"varargs".to_string()) && params.len() != self.param_names.len() {
             panic!(
                 "Invalid amount of arguments supplied! Expected {} arg(s)!",
                 self.param_names.len()
@@ -251,7 +251,7 @@ impl ExternFn {
 
     pub fn call(&self, params: Parameters) -> Literal
     {
-        if params.len() != self.param_names.len() {
+        if !self.param_names.contains(&"varargs".to_string()) && params.len() != self.param_names.len() {
             panic!(
                 "Invalid amount of arguments supplied! Expected {} arg(s)!",
                 self.param_names.len()

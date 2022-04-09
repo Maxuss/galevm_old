@@ -2,6 +2,7 @@ use crate::stdlib::__core_feature;
 use crate::stdlib::io::__io_feature;
 use crate::stdlib::math::__math_feature;
 use crate::stdlib::mem::__mem_feature;
+use crate::stdlib::prelude::__prelude_features;
 use crate::stdlib::strs::__str_feature;
 use crate::visit::Visitor;
 
@@ -11,7 +12,8 @@ pub enum StdFeature {
     IO,
     Math,
     Strings,
-    Memory
+    Memory,
+    Prelude
 }
 
 impl StdFeature {
@@ -21,7 +23,8 @@ impl StdFeature {
             StdFeature::IO => __io_feature(visitor),
             StdFeature::Math => __math_feature(visitor),
             StdFeature::Strings => __str_feature(visitor),
-            StdFeature::Memory => __mem_feature(visitor)
+            StdFeature::Memory => __mem_feature(visitor),
+            StdFeature::Prelude => __prelude_features(visitor)
         }
     }
 }
