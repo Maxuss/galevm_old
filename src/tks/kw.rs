@@ -58,18 +58,18 @@ impl Visitable for Keyword {
         match *self {
             Keyword::Struct => {}
             Keyword::Export => {
-                if let Literal::Ident(name) = &mut visitor.pop_stack() {
+                if let Literal::Ident(name) = &mut visitor.next_token()?.as_lit_no_ident(visitor, "Expected an element to export!") {
                     visitor.export(name.to_owned());
                 } else {
                     bail!("Expected an ident to be exported!")
                 }
             }
             Keyword::Import => {
-                if let Literal::Ident(name) = &mut visitor.pop_stack() {
-                    let split: Vec<&str> = name.split("::").collect();
+                if let Literal::Ident(name) = &mut visitor.next_token()?.as_lit_no_ident(visitor, "Expected an element to import!") {
+                    let (scope, name) = name.rsplit_once("::").unwrap();
                     visitor.import(
-                        split.get(0).unwrap().to_string(),
-                        split.get(1).unwrap().to_string(),
+                        scope.to_string(),
+                        name.to_string(),
                     );
                 } else {
                     bail!("Expected an ident to be imported!")

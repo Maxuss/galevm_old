@@ -244,29 +244,33 @@ impl ContainingScope {
     pub fn get_any_value(&mut self, name: &str) -> Option<ScopedValue> {
         let c = self.get_const(name);
         if c.is_some() {
-            return Some(ScopedValue::Constant(c.unwrap()));
+            return Some(ScopedValue::Constant(c?));
         }
         let m = self.get_var(name);
         if m.is_some() {
-            return Some(ScopedValue::Mutable(c.unwrap()));
+            return Some(ScopedValue::Mutable(c?));
         }
         let s = self.get_struct(name);
         if s.is_some() {
-            return Some(ScopedValue::Type(s.unwrap()));
+            return Some(ScopedValue::Type(s?));
         }
         let sf = self.get_static_fn(name);
         if sf.is_some() {
-            return Some(ScopedValue::StaticFn(sf.unwrap()));
+            return Some(ScopedValue::StaticFn(sf?));
         }
         let inf = self.get_inst_fn(name);
         if inf.is_some() {
-            return Some(ScopedValue::InstFn(inf.unwrap()));
+            return Some(ScopedValue::InstFn(inf?));
+        }
+        let ef = self.get_extern_fn(name);
+        if ef.is_some() {
+            return Some(ScopedValue::ExternFn(ef?))
         }
         return None;
     }
 
-    pub fn imports(&self) -> &HashMap<String, Vec<String>> {
-        &self.imports
+    pub fn imports(&mut self) -> HashMap<String, Vec<String>> {
+        self.imports.to_owned()
     }
 }
 
@@ -277,4 +281,5 @@ pub enum ScopedValue {
     Type(Structure),
     StaticFn(StaticFn),
     InstFn(InstFn),
+    ExternFn(ExternFn)
 }

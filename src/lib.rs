@@ -268,8 +268,10 @@ mod tests {
         vm.add_std_feature(StdFeature::Strings);
 
         let mut chain = vec![
+            Token::Keyword(Keyword::Import),
+            Token::Literal(Literal::Ident("std::io::print".to_string())),
             Token::Expression(Box::new(Expression::InvokeExtern(
-                "std::io::print".to_string(),
+                "print".to_string(),
                 vec![Token::Expression(Box::new(Expression::InvokeExtern("std::str::stringify".to_string(), vec![Token::Expression(Box::new(Expression::InvokeExtern("std::math::sin".to_string(), vec![Token::Literal(Literal::Float(45f64))])))])))])
             ))
         ];

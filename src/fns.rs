@@ -274,6 +274,7 @@ macro_rules! extern_fns {
             $(
                 let mut scope = $crate::var::ContainingScope::new();
                 $(
+                    scope.export(stringify!($name));
                     __extfns.push(Box::new($name));
                     scope.add_extern_fn(stringify!($name), stringify!($out_ty).to_string(), vec![$(stringify!($param).to_string()),*], __extfns.len());
                 )*

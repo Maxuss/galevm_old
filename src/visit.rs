@@ -152,8 +152,9 @@ impl Vm {
 
     pub fn merged_scope(&self) -> Arc<Mutex<ContainingScope>> {
         let current = self.scopes.get(&self.current_scope).unwrap().clone();
-        for (scope, values) in current.lock().unwrap().imports() {
-            let scope = self.scopes.get(scope).unwrap().clone();
+        let imports = current.lock().unwrap().imports().clone();
+        for (scope, values) in imports {
+            let scope = self.scopes.get(&scope).unwrap().clone();
             for name in values {
                 let value = scope.lock().unwrap().get_any_value(&name.clone());
                 match value {
@@ -161,14 +162,17 @@ impl Vm {
                         panic!("Tried to import non-existent value {:?}!", name)
                     }
                     Some(scoped) => match scoped {
-                        ScopedValue::Constant(v) => current.lock().unwrap().add_const(name, v),
-                        ScopedValue::Mutable(v) => current.lock().unwrap().add_var(name, v),
-                        ScopedValue::Type(v) => current.lock().unwrap().add_struct(name, v),
+                        ScopedValue::Constant(v) => current.lock().unwrap().add_const(&name, v),
+                        ScopedValue::Mutable(v) => current.lock().unwrap().add_var(&name, v),
+                        ScopedValue::Type(v) => current.lock().unwrap().add_struct(&name, v),
                         ScopedValue::StaticFn(v) => {
-                            current.lock().unwrap().add_prebuilt_static_fn(name, v)
+                            current.lock().unwrap().add_prebuilt_static_fn(&name, v)
                         }
                         ScopedValue::InstFn(v) => {
-                            current.lock().unwrap().add_prebuilt_inst_fn(name, v)
+                            current.lock().unwrap().add_prebuilt_inst_fn(&name, v)
+                        }
+                        ScopedValue::ExternFn(v) => {
+                            current.lock().unwrap().add_prebuilt_extern_fn(&name, v)
                         }
                     },
                 }
