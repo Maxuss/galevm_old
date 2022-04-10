@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn test_functions() {
         let mut vm = Vm::new();
-        vm.add_std_feature(StdFeature::IO);
+        vm.add_std_feature(StdFeature::Prelude);
         let mut chain = vec![
             Token::Keyword(Keyword::Function),
             Token::Literal(Literal::TypeName("void".to_string())),
@@ -102,14 +102,14 @@ mod tests {
             Token::Keyword(Keyword::Let),
             Token::Literal(Literal::Ident("greeting".to_string())),
             Token::Expression(Box::new(Expression::InvokeStatic(
-                "std::io::fmt".to_string(),
+                "fmt".to_string(),
                 vec![
                     Token::Literal(Literal::String("Hello, {}".to_string())),
                     Token::Literal(Literal::Ident("name".to_string())),
                 ],
             ))),
             Token::Expression(Box::new(Expression::InvokeStatic(
-                "std::io::println".to_string(),
+                "println".to_string(),
                 vec![Token::Literal(Literal::Ident("greeting".to_string()))],
             ))),
             Token::Keyword(Keyword::Return),

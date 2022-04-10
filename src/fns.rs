@@ -18,6 +18,15 @@ lazy_static! {
     pub static ref EXTERN_FNS: Mutex<Vec<Box<DynExecutable>>> = Mutex::new(Vec::new());
 }
 
+#[inline]
+pub fn import_globals<V>(scope: &mut ContainingScope, visitor: &mut V) where V: Visitor {
+    for (from, imports) in visitor.get_scope("global".to_string()).lock().unwrap().imports() {
+        for import in imports {
+            scope.import(&from, &import);
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum StaticFnType {
     Standard(StaticFn),
@@ -152,6 +161,8 @@ impl InstFn {
         }
         scope.add_const("this", Literal::Struct(this));
 
+        import_globals(&mut scope, visitor);
+
         // creating scope
         let cached = visitor.scope_name();
         let name = format!("inst_fn_0x{:2x}", rand::thread_rng().next_u64());
@@ -205,6 +216,8 @@ impl StaticFn {
             scope.add_const(self.param_names[pid].as_str(), params[pid].to_owned());
         }
 
+        import_globals(&mut scope, visitor);
+
         // creating scope
         let cached = visitor.scope_name();
         let name = format!("static_fn_0x{:2x}", rand::thread_rng().next_u64());
@@ -257,6 +270,7 @@ impl ExternFn {
                 self.param_names.len()
             );
         };
+
         let fun = &EXTERN_FNS.lock().unwrap()[max(0, self.handler - 1)];
         fun.call((params, ))
     }
