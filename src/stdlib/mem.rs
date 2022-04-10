@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::io::Cursor;
 use crate::{extern_fns, Parameters, unwrap_args};
-use crate::structs::Structure;
+use crate::structs::StructureInstance;
 use crate::tks::Literal;
 use crate::visit::Visitor;
 use crate::vm::Transmute;
@@ -21,7 +21,7 @@ fn transmute(params: Parameters) -> Literal {
         "bool" => Literal::Bool(bool::read(&mut cur).unwrap()),
         "typename" => Literal::TypeName(String::read(&mut cur).unwrap()),
         "void" => Literal::Void,
-        _ => Literal::Struct(Box::new(Structure::read(&mut cur).unwrap()))
+        _ => Literal::Struct(Box::new(StructureInstance::read(&mut cur).unwrap()))
     }
 }
 

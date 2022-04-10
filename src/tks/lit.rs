@@ -1,4 +1,4 @@
-use crate::structs::Structure;
+use crate::structs::StructureInstance;
 use crate::tks::Ident;
 use crate::visit::{Visitable, Visitor};
 use crate::vm::Transmute;
@@ -56,7 +56,7 @@ impl Into<Literal> for bool {
     }
 }
 
-impl Into<Literal> for Structure {
+impl Into<Literal> for StructureInstance {
     fn into(self) -> Literal {
         Literal::Struct(Box::new(self))
     }
@@ -71,7 +71,7 @@ pub enum Literal {
     Ident(Ident),
     Bool(bool),
     TypeName(String),
-    Struct(Box<Structure>),
+    Struct(Box<StructureInstance>),
     Void,
 }
 
@@ -142,7 +142,7 @@ impl Transmute for Literal {
             0x05 => Literal::Ident(Ident::read(buf)?),
             0x06 => Literal::Bool(bool::read(buf)?),
             0x07 => Literal::TypeName(String::read(buf)?),
-            0x08 => Literal::Struct(Box::new(Structure::read(buf)?)),
+            0x08 => Literal::Struct(Box::new(StructureInstance::read(buf)?)),
             _ => panic!("Invalid LitID provided!"),
         })
     }

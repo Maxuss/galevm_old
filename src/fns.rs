@@ -1,5 +1,5 @@
 use std::cmp::max;
-use crate::structs::Structure;
+use crate::structs::StructureInstance;
 use crate::tks::{Literal, TokenChain};
 use crate::var::ContainingScope;
 use crate::visit::{Scope, Visitor};
@@ -143,7 +143,7 @@ impl InstFn {
         }
     }
 
-    pub fn call<V>(&self, this: Box<Structure>, params: Parameters, visitor: &mut V) -> Literal
+    pub fn call<V>(&self, this: Box<StructureInstance>, params: Parameters, visitor: &mut V) -> Literal
     where
         V: Visitor,
     {
@@ -173,6 +173,7 @@ impl InstFn {
 
         // processing tokens
         visitor.load_chain(&mut self.chain.clone());
+        visitor.process();
         let output = visitor.pop_stack();
         if self.out_ty != "unknown" && !output.type_str(&self.out_ty) {
             panic!(

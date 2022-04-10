@@ -35,7 +35,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::structs::Structure;
+    use crate::structs::StructureTemplate;
     use crate::tks::{BinaryOp, Expression, Keyword, Literal, Token};
     use crate::visit::{ScopeProvider, Visitor, Vm};
     use std::time::Instant;
@@ -75,16 +75,18 @@ mod tests {
     }
 
     #[test]
-    fn test_structs() {
+    fn test_extern_structs() {
         let mut vm = Vm::new();
-        let mut str = Structure::with_type("Structure");
-        str.add_var("cool_var".to_string(), Literal::Bool(true));
-        str.add_const("cool_const".to_string(), Literal::Number(1200));
+        vm.add_std_feature(StdFeature::Prelude);
+        let mut str = StructureTemplate::with_type("Structure");
+        str.add_static_var("cool_var".to_string(), Literal::Bool(true));
+        vm.register_type(&str);
         let mut chain = vec![Token::Expression(Box::new(Expression::InvokeStatic(
-            "debugp".to_string(),
-            vec![Token::Literal(Literal::Struct(Box::new(str)))],
+            "debug".to_string(),
+            vec![Token::Expression(Box::new(Expression::StaticAccess(vec!["Structure".to_string(), "cool_var".to_string()])))],
         )))];
         vm.load_chain(&mut chain);
+        vm.process();
     }
 
     #[test]
@@ -293,6 +295,27 @@ mod tests {
             Token::Expression(Box::new(Expression::InvokeStatic("println".to_string(), vec![Token::Literal(Literal::String("Hello!".to_string()))]))),
             Token::Expression(Box::new(Expression::InvokeStatic("sleep".to_string(), vec![Token::Literal(Literal::Number(5))]))),
             Token::Expression(Box::new(Expression::InvokeStatic("println".to_string(), vec![Token::Literal(Literal::String("Hello again!".to_string()))])))
+        ];
+        vm.load_chain(&mut chain);
+        vm.process();
+    }
+
+    #[test]
+    fn test_structs() {
+        let mut vm = Vm::new();
+        vm.add_std_feature(StdFeature::Prelude);
+        let mut chain = vec![
+            Token::Keyword(Keyword::Struct),
+            Token::Literal(Literal::Ident("Structure".to_string())),
+            Token::LBracket,
+            Token::Keyword(Keyword::Let),
+            Token::Literal(Literal::Ident("test".to_string())),
+            Token::Literal(Literal::String("Hello, World!".to_string())),
+            Token::RBracket,
+            Token::Expression(Box::new(Expression::InvokeStatic("debug".to_string(), vec![
+                Token::Expression(Box::new(Expression::StaticAccess(vec!["Structure".to_string(), "test".to_string()])))
+            ]))),
+            //Token::Expression(Box::new(Expression::InvokeStatic("Structure.test_fn".to_string(), vec![])))
         ];
         vm.load_chain(&mut chain);
         vm.process();

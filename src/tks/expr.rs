@@ -1,18 +1,18 @@
-use crate::fns::Parameters;
+use std::collections::VecDeque;
 use crate::tks::expr_handlers::_binary_op_handler;
 use crate::tks::{BinaryOp, Ident, Literal, Token, TokenChain, UnaryOp};
-use crate::var::ScopedValue;
 use crate::visit::{Visitable, Visitor};
 use crate::vm::Transmute;
 use anyhow::bail;
 use std::io::Cursor;
+use crate::structs::StructureInstance;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     BinaryOp(BinaryOp, Token, Token),
     UnaryOp(UnaryOp, Token),
     StaticAccess(Vec<Ident>),
-    InstanceAccess(Vec<Ident>),
+    InstanceAccess(Box<StructureInstance>, Vec<Ident>),
     InvokeStatic(Ident, TokenChain),
     InvokeInstance(Ident, TokenChain),
     IfStmt,
@@ -27,7 +27,7 @@ impl Transmute for Expression {
             Expression::BinaryOp(op, l, r) => op.size() + l.size() + r.size(),
             Expression::UnaryOp(op, l) => op.size() + l.size(),
             Expression::StaticAccess(i) => i.size(),
-            Expression::InstanceAccess(i) => i.size(),
+            Expression::InstanceAccess(this, i) => this.size() + i.size(),
             Expression::InvokeStatic(i, p) => i.size() + p.size(),
             Expression::InvokeInstance(i, p) => i.size() + p.size(),
             _ => 0,
@@ -51,8 +51,9 @@ impl Transmute for Expression {
                 0x02u8.write(buf)?;
                 i.write(buf)?;
             }
-            Expression::InstanceAccess(i) => {
+            Expression::InstanceAccess(this, i) => {
                 0x02u8.write(buf)?;
+                this.write(buf)?;
                 i.write(buf)?;
             }
             Expression::InvokeStatic(i, p) => {
@@ -82,7 +83,7 @@ impl Transmute for Expression {
                 Expression::BinaryOp(BinaryOp::read(buf)?, Token::read(buf)?, Token::read(buf)?)
             }
             0x01 => Expression::UnaryOp(UnaryOp::read(buf)?, Token::read(buf)?),
-            0x02 => Expression::InstanceAccess(Vec::read(buf)?),
+            0x02 => Expression::InstanceAccess(Box::new(StructureInstance::read(buf)?), Vec::read(buf)?),
             0x03 => Expression::InvokeStatic(Ident::read(buf)?, TokenChain::read(buf)?),
             0x04 => Expression::InvokeInstance(Ident::read(buf)?, TokenChain::read(buf)?),
             0x05 => Expression::IfStmt,
@@ -157,27 +158,43 @@ impl Visitable for Expression {
                 }
             }
             Expression::StaticAccess(path) => {
-                if path.len() > 1 {
+                if path.len() > 2 {
                     // specific scope
                     let scope = path.get(0).unwrap();
-                    let element = path.get(1).unwrap();
-                    let scope = visitor.get_scope(scope.to_owned());
-                    let lit = match scope.lock().unwrap().get_any_value(&element).unwrap() {
-                        ScopedValue::Constant(v) => v,
-                        ScopedValue::Mutable(v) => v,
-                        _ => Literal::Void,
-                    };
+                    let str = path.get(1).unwrap();
+                    let element = path.get(2).unwrap();
+                    let vis = visitor.clone();
+                    let scope = vis.get_scope(scope.to_owned());
+                    let mut scope = scope.lock().unwrap();
+                    let str = scope.get_struct(str).unwrap();
+                    let str = str.lock().unwrap();
+
+                    let lit = str.get_static_var(element.to_string()).unwrap_or_else(|| str.get_const(element.to_string()));
                     visitor.push_stack(lit);
                 } else {
                     // all scopes
-                    let element = path.get(0).unwrap();
-                    let lit = visitor.resolve_any_var(&element);
+                    let str = path.get(0).unwrap();
+                    let element = path.get(1).unwrap();
+
+                    let str = visitor.resolve_type(str.to_string());
+                    let str = str.lock().unwrap();
+                    let lit = str.get_static_var(element.to_string()).unwrap_or_else(|| str.get_const(element.to_string()));
                     visitor.push_stack(lit);
                 }
                 return Ok(());
             }
-            Expression::InstanceAccess(_path) => {
-                // TODO
+            Expression::InstanceAccess(this, path) => {
+                let mut path = VecDeque::from(path.to_owned());
+                let name: Ident = path.pop_back().unwrap();
+                let str: Ident = path.pop_back().unwrap();
+                let scope = path.pop_back();
+                let str = if let Some(scope) = scope {
+                    visitor.get_scope(scope).lock().unwrap().get_struct(&str).unwrap()
+                } else {
+                    visitor.resolve_type(str)
+                };
+                let var = str.lock().unwrap().get_inst_var(this, name);
+                visitor.push_stack(var);
                 return Ok(());
             }
             Expression::InvokeStatic(path, params) => {
@@ -186,20 +203,16 @@ impl Visitable for Expression {
                 return Ok(());
             }
             Expression::InvokeInstance(path, params) => {
-                let old_params = params.clone();
-                let params = params
-                    .iter_mut()
-                    .map(|it| it.as_lit_advanced(visitor, "Expected a literal-like!"))
-                    .collect::<Parameters>();
-                let str = params.get(0).unwrap();
-                let str = match str {
-                    Literal::Struct(str) => str.to_owned(),
-                    _ => panic!(
-                        "Expected a structure or structure pointer, got {:?}!",
-                        str.clone()
-                    ),
+                let (ident, name) = path.rsplit_once(".").unwrap();
+                let this = if let Literal::Struct(this) = visitor.resolve_var(ident).unwrap() {
+                    this
+                } else {
+                    panic!("Expected structure ident!")
                 };
-                let lit = visitor.call_inst_fn(path.to_owned(), str, old_params);
+
+                let old_params = params.clone();
+
+                let lit = visitor.call_inst_fn(name.to_string(), this, old_params);
                 visitor.push_stack(lit);
                 return Ok(());
             }

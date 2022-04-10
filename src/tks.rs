@@ -111,6 +111,10 @@ impl Visitable for Token {
                 // We should not reach this!
                 panic!("Tried to move to END scope!")
             }
+            Token::RBracket => {
+                visitor.pop_scope_level();
+                Ok(())
+            }
             _ => Ok(()), // ignoring because it is either scopes or whitespaces
         }
     }

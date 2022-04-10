@@ -3,6 +3,7 @@ use crate::visit::{Scope, Visitable, Visitor};
 use crate::vm::Transmute;
 use anyhow::bail;
 use std::io::Cursor;
+use crate::structs::StructureTemplate;
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Keyword {
@@ -56,7 +57,40 @@ impl Visitable for Keyword {
         V: Visitor,
     {
         match *self {
-            Keyword::Struct => {}
+            Keyword::Struct => {
+                let mut next = visitor.next_token()?.as_lit_no_ident(visitor, "Expected an element to export!");
+                let name = if let Literal::Ident(name) = &mut next {
+                    name
+                } else {
+                    bail!("Expected an ident struct name!")
+                };
+                visitor.add_struct_name(name.clone());
+                let _lbracket = visitor.next_token()?;
+
+                let mut chain = Vec::new();
+
+                let mut depth = 1;
+
+                loop {
+                    let peek = visitor.peek_token()?;
+                    if peek == Token::RBracket {
+                        depth -= 1;
+                    } else if peek == Token::LBracket {
+                        depth += 1;
+                    }
+
+                    if depth <= 0 {
+                        break;
+                    }
+
+                    chain.push(visitor.next_token()?);
+                }
+
+                let _rbracket = visitor.next_token()?;
+
+                let str = StructureTemplate::from_chain(name.clone(), chain, visitor);
+                visitor.register_type(&str);
+            }
             Keyword::Export => {
                 if let Literal::Ident(name) = &mut visitor.next_token()?.as_lit_no_ident(visitor, "Expected an element to export!") {
                     visitor.export(name.to_owned());
