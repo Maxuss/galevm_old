@@ -1,5 +1,4 @@
 use crate::fns::{ExternFn, StaticFn, StaticFnType};
-use crate::structs::StructureTemplate;
 use crate::tks::{Literal, TokenChain};
 use crate::vm::Transmute;
 use std::collections::HashMap;
@@ -11,8 +10,6 @@ use std::sync::{Arc, Mutex, MutexGuard};
 pub fn merge_scopes(first: &mut ContainingScope, second: &mut MutexGuard<ContainingScope>) {
     first.imports = second.imports.clone();
     first.exports = second.exports.clone();
-    first.structs = second.structs.clone();
-    first.extern_fns = second.extern_fns.clone();
     first.mutables = second.mutables.clone();
     first.static_fns = second.static_fns.clone();
     first.consts = second.consts.clone();
@@ -78,9 +75,7 @@ pub struct ContainingScope {
     consts: HashMap<String, Literal>,
     static_fns: HashMap<String, Box<StaticFnType>>,
     exports: Vec<String>,
-    extern_fns: HashMap<String, Box<ExternFn>>,
     imports: HashMap<String, Vec<String>>,
-    structs: HashMap<String, StructureTemplate>,
 }
 
 impl Transmute for ContainingScope {
@@ -90,7 +85,6 @@ impl Transmute for ContainingScope {
             + self.static_fns.size()
             + self.exports.size()
             + self.imports.size()
-            + self.structs.size()
     }
 
     fn write(&mut self, buf: &mut Vec<u8>) -> anyhow::Result<()> {
@@ -100,7 +94,6 @@ impl Transmute for ContainingScope {
         self.static_fns.write(buf)?;
         self.exports.write(buf)?;
         self.imports.write(buf)?;
-        self.structs.write(buf)?;
         Ok(())
     }
 
@@ -113,9 +106,7 @@ impl Transmute for ContainingScope {
             consts: HashMap::read(buf)?,
             static_fns: HashMap::read(buf)?,
             exports: Vec::read(buf)?,
-            extern_fns: HashMap::read(buf)?,
             imports: HashMap::read(buf)?,
-            structs: HashMap::read(buf)?,
         })
     }
 }
@@ -127,9 +118,7 @@ impl ContainingScope {
             consts: Default::default(),
             static_fns: Default::default(),
             exports: vec![],
-            extern_fns: Default::default(),
             imports: Default::default(),
-            structs: Default::default(),
         }
     }
 
@@ -211,27 +200,6 @@ impl ContainingScope {
         self.static_fns.insert(name.to_string(), Box::new(StaticFnType::Extern(ef)));
     }
 
-    pub fn add_struct(&mut self, name: &str, typ: StructureTemplate) {
-        self.structs.insert(name.to_string(), typ);
-        println!()
-    }
-
-    pub fn get_struct(&mut self, typename: &str) -> Option<Arc<Mutex<StructureTemplate>>> {
-        self.structs.iter().find(|(_, it)| it.typename() == typename).map(|(_, s)| Arc::new(Mutex::new(s.to_owned())))
-    }
-
-    pub fn get_struct_ptr(&mut self, typename: String) -> Option<String> {
-        self.structs.iter().find(|(_, v)| v.typename() == typename).map(|(k, _)| k.to_owned())
-    }
-
-    pub fn get_struct_raw(&mut self, ptr: usize) -> Option<StructureTemplate> {
-        self.structs.get(&format!("0x{:2x}", ptr)).map(|s| s.to_owned())
-    }
-
-    pub fn structs(&self) -> HashMap<String, StructureTemplate> {
-        self.structs.clone()
-    }
-
     pub fn get_static_fn(&mut self, name: &str) -> Option<StaticFnType> {
         self.static_fns.get(name).map(|f| *f.clone())
     }
@@ -244,10 +212,6 @@ impl ContainingScope {
         let m = self.get_var(name);
         if m.is_some() {
             return Some(ScopedValue::Mutable(c?));
-        }
-        let s = self.get_struct(name);
-        if s.is_some() {
-            return Some(ScopedValue::Type(s.clone().unwrap()));
         }
         let sf = self.get_static_fn(name);
         if sf.is_some() {
@@ -265,6 +229,5 @@ impl ContainingScope {
 pub enum ScopedValue {
     Constant(Literal),
     Mutable(Literal),
-    Type(Arc<Mutex<StructureTemplate>>),
     StaticFn(StaticFnType),
 }

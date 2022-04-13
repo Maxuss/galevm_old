@@ -1,4 +1,3 @@
-use crate::structs::{StructureInstance, StructureTemplate};
 use crate::tks::{Literal, Token, TokenChain};
 use crate::var::{ContainingScope, ScopedValue};
 use crate::ToResult;
@@ -28,8 +27,6 @@ pub trait TokenProvider {
 pub trait ScopeProvider {
     fn add_std_feature(&mut self, feature: StdFeature);
 
-    fn get_type_ptr(&self, typename: String) -> anyhow::Result<usize>;
-
     fn resolve_var(&self, name: &str) -> anyhow::Result<Literal>;
     fn resolve_const(&self, name: &str) -> anyhow::Result<Literal>;
 
@@ -46,13 +43,6 @@ pub trait ScopeProvider {
         param_names: Vec<String>,
         tks: TokenChain,
     );
-    fn add_inst_fn(
-        &mut self,
-        name: String,
-        output_ty: String,
-        param_names: Vec<String>,
-        tks: TokenChain,
-    );
     fn add_extern_fn(
         &mut self,
         name: String,
@@ -61,14 +51,9 @@ pub trait ScopeProvider {
         ptr: usize
     );
 
-    fn register_type(&mut self, structure: &StructureTemplate);
-    fn resolve_type(&mut self, name: String) -> Arc<Mutex<StructureTemplate>>;
-    fn resolve_type_raw(&mut self, ptr: usize) -> StructureTemplate;
-
     fn current_struct_name(&self) -> Option<String>;
     fn add_struct_name(&mut self, name: String);
 
-    fn call_inst_fn(&mut self, name: String, this: Box<StructureInstance>, params: TokenChain) -> Literal;
     fn call_static_fn(&mut self, name: String, params: TokenChain) -> Literal;
     fn call_ptr_fn(&mut self, ptr: usize, params: TokenChain) -> Literal;
 
@@ -186,7 +171,6 @@ impl Vm {
                     Some(scoped) => match scoped {
                         ScopedValue::Constant(v) => current.lock().unwrap().add_const(&name, v),
                         ScopedValue::Mutable(v) => current.lock().unwrap().add_var(&name, v),
-                        ScopedValue::Type(v) => current.lock().unwrap().add_struct(&name, v.lock().unwrap().to_owned()),
                         ScopedValue::StaticFn(v) => {
                             match v {
                                 StaticFnType::Standard(std) => current.lock().unwrap().add_prebuilt_static_fn(&name, std),
@@ -229,11 +213,6 @@ impl TokenProvider for Vm {
 impl ScopeProvider for Vm {
     fn add_std_feature(&mut self, feature: StdFeature) {
         feature.include(self)
-    }
-
-    fn get_type_ptr(&self, typename: String) -> anyhow::Result<usize> {
-        let k = self.merged_scope().lock().unwrap().get_struct_ptr(typename.clone()).expect(&format!("Could not find structure {} in current scope!", typename));
-        Ok(u64::from_str_radix(k.trim_start_matches("0x"), 16).unwrap() as usize)
     }
 
     fn resolve_var(&self, name: &str) -> anyhow::Result<Literal> {
@@ -307,16 +286,6 @@ impl ScopeProvider for Vm {
             .add_static_fn(&name, output_ty, param_names, tks);
     }
 
-    fn add_inst_fn(&mut self, name: String, output_ty: String, param_names: Vec<String>, tks: TokenChain) {
-        if *self.scope_types.front().unwrap() != Scope::Struct {
-            panic!("Can not add instance function outside of structure!")
-        }
-        let struct_name = self.current_struct_name().unwrap();
-        let str = self.get_scope("global".to_string()).lock().unwrap().get_struct(&struct_name).unwrap();
-        let mut str = str.lock().unwrap();
-        str.add_inst_fn(name, output_ty, param_names, tks);
-    }
-
     fn add_extern_fn(&mut self, name: String, output_ty: String, param_names: Vec<String>, ptr: usize) {
         self.scopes
             .get(&self.current_scope)
@@ -326,47 +295,12 @@ impl ScopeProvider for Vm {
             .add_extern_fn(&name, output_ty, param_names, ptr);
     }
 
-    fn register_type(&mut self, structure: &StructureTemplate) {
-        self.scopes
-            .get(&self.current_scope)
-            .unwrap()
-            .lock()
-            .unwrap()
-            .add_struct(&format!("0x{:2x}", rand::thread_rng().next_u64()), structure.to_owned());
-    }
-
-    fn resolve_type(&mut self, name: String) -> Arc<Mutex<StructureTemplate>> {
-        self.merged_scope()
-            .lock()
-            .unwrap()
-            .get_struct(&name)
-            .expect(format!("Could not find type {:?}!", name).as_str())
-    }
-
-    fn resolve_type_raw(&mut self, ptr: usize) -> StructureTemplate {
-        self.merged_scope().lock().unwrap().get_struct_raw(ptr).expect(format!("Could not find type by pointer 0x{:2x}!", ptr).as_str())
-    }
-
     fn current_struct_name(&self) -> Option<String> {
         self.struct_names.iter().peekable().peek().map(|it| it.to_string())
     }
 
     fn add_struct_name(&mut self, name: String) {
         self.struct_names.push_front(name);
-    }
-
-    fn call_inst_fn(&mut self, name: String, this: Box<StructureInstance>, params: TokenChain) -> Literal {
-        if self.scope_level() == Scope::Struct {
-            self.emit_error("Can not call functions inside a raw struct scope!")
-        }
-        let mut params = params.clone();
-        let params = params
-            .iter_mut()
-            .map(|it| it.as_lit_advanced(self, "Expected a literal-like!"))
-            .collect();
-        let str = self.merged_scope().lock().unwrap().get_struct(&this.typename()).unwrap();
-        let mut str = str.lock().unwrap();
-        str.call_inst_fn(*this, name, params, self)
     }
 
     fn call_static_fn(&mut self, name: String, params: TokenChain) -> Literal {
@@ -380,15 +314,8 @@ impl ScopeProvider for Vm {
             .map(|it| it.as_lit_advanced(self, "Expected a literal-like!"))
             .collect();
         if name.contains(".") {
-            let (str, name) = name.rsplit_once(".").unwrap();
-            let str = if str.contains("::") {
-                let (scope, str) = str.rsplit_once("::").unwrap();
-                self.get_scope(scope.to_string()).lock().unwrap().get_struct(str).unwrap()
-            } else {
-                self.merged_scope().lock().unwrap().get_struct(str).unwrap()
-            };
-            let mut str = str.lock().unwrap();
-            str.call_static_fn(name.to_string(), params, self)
+            // TODO: table handling
+            return Literal::Void
         } else if name.contains("::") {
             let (scope, fnc_name) = name.rsplit_once("::").unwrap();
             let fnc = self

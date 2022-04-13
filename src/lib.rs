@@ -7,7 +7,6 @@ use anyhow::bail;
 use crate::fns::Parameters;
 
 pub mod fns;
-pub mod structs;
 pub mod tks;
 pub mod var;
 pub mod visit;
@@ -35,7 +34,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::structs::StructureTemplate;
     use crate::tks::{BinaryOp, Expression, Keyword, Literal, Token};
     use crate::visit::{ScopeProvider, Visitor, Vm};
     use std::time::Instant;
@@ -72,21 +70,6 @@ mod tests {
         vm.load_chain(&mut chain);
         vm.process();
         println!("{:#?}", vm);
-    }
-
-    #[test]
-    fn test_extern_structs() {
-        let mut vm = Vm::new();
-        vm.add_std_feature(StdFeature::Prelude);
-        let mut str = StructureTemplate::with_type("Structure");
-        str.add_static_var("cool_var".to_string(), Literal::Bool(true));
-        vm.register_type(&str);
-        let mut chain = vec![Token::Expression(Box::new(Expression::InvokeStatic(
-            "debug".to_string(),
-            vec![Token::Expression(Box::new(Expression::StaticAccess(vec!["Structure".to_string(), "cool_var".to_string()])))],
-        )))];
-        vm.load_chain(&mut chain);
-        vm.process();
     }
 
     #[test]
@@ -305,7 +288,6 @@ mod tests {
         let mut vm = Vm::new();
         vm.add_std_feature(StdFeature::Prelude);
         let mut chain = vec![
-            Token::Keyword(Keyword::Struct),
             Token::Literal(Literal::Ident("Structure".to_string())),
             Token::LBracket,
             Token::Keyword(Keyword::Let),

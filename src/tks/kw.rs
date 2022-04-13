@@ -3,11 +3,9 @@ use crate::visit::{Scope, Visitable, Visitor};
 use crate::vm::Transmute;
 use anyhow::bail;
 use std::io::Cursor;
-use crate::structs::StructureTemplate;
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Keyword {
-    Struct,   // struct
     Export,   // export
     Import,   // import
     Let,      // let
@@ -23,7 +21,6 @@ impl Transmute for Keyword {
 
     fn write(&mut self, buf: &mut Vec<u8>) -> anyhow::Result<()> {
         match self {
-            Keyword::Struct => 0x00u8,
             Keyword::Export => 0x01,
             Keyword::Import => 0x02,
             Keyword::Let => 0x03,
@@ -39,7 +36,6 @@ impl Transmute for Keyword {
         Self: Sized,
     {
         Ok(match u8::read(buf)? {
-            0x00 => Keyword::Struct,
             0x01 => Keyword::Export,
             0x02 => Keyword::Import,
             0x03 => Keyword::Let,
@@ -57,40 +53,6 @@ impl Visitable for Keyword {
         V: Visitor,
     {
         match *self {
-            Keyword::Struct => {
-                let mut next = visitor.next_token()?.as_lit_no_ident(visitor, "Expected an element to export!");
-                let name = if let Literal::Ident(name) = &mut next {
-                    name
-                } else {
-                    bail!("Expected an ident struct name!")
-                };
-                visitor.add_struct_name(name.clone());
-                let _lbracket = visitor.next_token()?;
-
-                let mut chain = Vec::new();
-
-                let mut depth = 1;
-
-                loop {
-                    let peek = visitor.peek_token()?;
-                    if peek == Token::RBracket {
-                        depth -= 1;
-                    } else if peek == Token::LBracket {
-                        depth += 1;
-                    }
-
-                    if depth <= 0 {
-                        break;
-                    }
-
-                    chain.push(visitor.next_token()?);
-                }
-
-                let _rbracket = visitor.next_token()?;
-
-                let str = StructureTemplate::from_chain(name.clone(), chain, visitor);
-                visitor.register_type(&str);
-            }
             Keyword::Export => {
                 if let Literal::Ident(name) = &mut visitor.next_token()?.as_lit_no_ident(visitor, "Expected an element to export!") {
                     visitor.export(name.to_owned());
@@ -177,17 +139,8 @@ impl Visitable for Keyword {
                     }
                     let _rbracket = visitor.next_token()?;
 
-                    if param_names.len() > 0 && param_names[0] == "this" {
-                        // Instance function, need to confirm that we are inside struct right now
-                        if visitor.scope_level() != Scope::Struct {
-                            panic!("Can not have instance functions outside of structs!")
-                        }
-
-                        visitor.add_inst_fn(name, out_ty, param_names, chain);
-                    } else {
-                        // Default static function
-                        visitor.add_static_fn(name, out_ty, param_names, chain);
-                    }
+                    // TODO: possible table handling?
+                    visitor.add_static_fn(name, out_ty, param_names, chain);
                 } else if let Literal::String(_native) = pop {
                     if let Literal::Ident(_name) = &mut visitor.pop_stack() {
                         panic!("Native functions are not yet supported!")

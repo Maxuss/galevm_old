@@ -1,4 +1,3 @@
-use crate::structs::StructureInstance;
 use crate::tks::Ident;
 use crate::visit::{Visitable, Visitor};
 use crate::vm::Transmute;
@@ -56,12 +55,6 @@ impl Into<Literal> for bool {
     }
 }
 
-impl Into<Literal> for StructureInstance {
-    fn into(self) -> Literal {
-        Literal::Struct(Box::new(self))
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     Number(i64),
@@ -71,7 +64,6 @@ pub enum Literal {
     Ident(Ident),
     Bool(bool),
     TypeName(String),
-    Struct(Box<StructureInstance>),
     Void,
 }
 
@@ -85,7 +77,6 @@ impl Transmute for Literal {
             Literal::Ident(v) => v.size(),
             Literal::Bool(v) => v.size(),
             Literal::TypeName(v) => v.size(),
-            Literal::Struct(v) => v.size(),
             Literal::Void => 0,
         }
     }
@@ -120,10 +111,6 @@ impl Transmute for Literal {
                 0x07u8.write(buf)?;
                 v.write(buf)?
             }
-            Literal::Struct(v) => {
-                0x08u8.write(buf)?;
-                v.write(buf)?
-            }
             Literal::Void => 0x00u8.write(buf)?,
         };
         Ok(())
@@ -142,7 +129,6 @@ impl Transmute for Literal {
             0x05 => Literal::Ident(Ident::read(buf)?),
             0x06 => Literal::Bool(bool::read(buf)?),
             0x07 => Literal::TypeName(String::read(buf)?),
-            0x08 => Literal::Struct(Box::new(StructureInstance::read(buf)?)),
             _ => panic!("Invalid LitID provided!"),
         })
     }
@@ -158,7 +144,6 @@ impl Display for Literal {
             Literal::Ident(v) => f.write_str(&v),
             Literal::Bool(v) => f.write_str(&v.to_string()),
             Literal::TypeName(v) => f.write_str(&v),
-            Literal::Struct(v) => f.write_str(&format!("{:#?}", v)),
             Literal::Void => f.write_str("*"),
         }
     }
@@ -174,7 +159,6 @@ impl Literal {
             Literal::Ident(_) => "void".to_string(),
             Literal::Bool(_) => "bool".to_string(),
             Literal::TypeName(_) => "typename".to_string(),
-            Literal::Struct(str) => str.typename(),
             Literal::Void => "void".to_string(),
         }
     }
@@ -189,7 +173,6 @@ impl Literal {
             Literal::Bool(_) => tn == "bool",
             Literal::TypeName(_) => tn == "typename",
             Literal::Void => tn == "void",
-            Literal::Struct(str) => tn == &str.typename(),
         }
     }
 
@@ -240,13 +223,6 @@ impl Literal {
             Literal::Bool(_) => {
                 if let Literal::Bool(_) = other {
                     true
-                } else {
-                    false
-                }
-            }
-            Literal::Struct(str) => {
-                if let Literal::Struct(another) = other {
-                    another.typename() == str.typename()
                 } else {
                     false
                 }
